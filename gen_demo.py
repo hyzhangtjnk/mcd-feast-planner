@@ -8,6 +8,18 @@
 import json
 import os
 import sys
+if sys.platform == 'win32':
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+    if hasattr(sys.stderr, 'reconfigure'):
+        try:
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SCRIPTS = os.path.join(_HERE, "skills", "mcd-feast-planner", "scripts")
@@ -192,7 +204,7 @@ const D = __DATA__;
 function yuan(c){return (c/100).toFixed(2);}
 
 // 顶部统计（数字来自真实校验）
-document.getElementById('s1').textContent = '146 / 0';
+document.getElementById('s1').textContent = '204 / 0';
 document.getElementById('s2').textContent = '0 漏网';
 document.getElementById('s3').textContent = '0 问题';
 document.getElementById('s4').textContent = '58 / 63';
