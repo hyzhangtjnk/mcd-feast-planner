@@ -56,6 +56,8 @@ from normalize import (                              # noqa: E402
     infer_category, merge_nutrition, parse_nutrition,
     is_nonfood, looks_like_food, parse_combo_items, parse_combo_rounds,
     build_meals, _nutrition_from_rounds,
+    parse_stores as _parse_stores, parse_coupons as _parse_coupons,
+    parse_order_result as _parse_order_result,
 )
 from feast_cli import load_sample_meals, parse_person      # noqa: E402
 from solo_engine import (                              # noqa: E402
@@ -752,7 +754,7 @@ if ones:
 print("\n[16] Codex 复审2 修复回归")
 
 import ssl as ssl_module                              # noqa: E402
-from mcd_client import McdMcpClient                   # noqa: E402
+from mcd_client import McdMcpClient, McdMcpError      # noqa: E402
 
 # (1) 严重#3：min=1,max=0 绝不允许选件
 _mx0 = Meal(code="MX0", name="上限零测试", price=1000)
@@ -922,11 +924,55 @@ if _res_eng.plans:
 check("仅设营养约束时选法口径一致（严重#1）", _eng_ok,
       "最终方案热量超出约束")
 
-# (3) 严重#2：只读声明必须名副其实 —— 不得存在写操作接口
-check("客户端无下单接口（严重#2）", not hasattr(McdMcpClient, "create_order"))
-check("客户端无领券接口（严重#2）", not hasattr(McdMcpClient, "auto_bind_coupons"))
-check("客户端无个人订单接口（严重#2）", not hasattr(McdMcpClient, "order_list"))
-check("客户端无个人券接口（严重#2）", not hasattr(McdMcpClient, "query_my_coupons"))
+# (3) 严重#2：能力声明必须名副其实。
+#     ⚠️ 本项已随版本演进**反转**：旧版声明为「只读/无写操作」，故那时断言
+#     「不存在下单/领券接口」；现在按用户要求补齐了门店/券/下单能力，
+#     于是改为断言「接口确实存在」+「写操作必须显式确认才可能真正执行」。
+#     若只删掉旧断言而不补新断言，声明与代码就会再次脱节。
+check("客户端具备下单接口（严重#2）", hasattr(McdMcpClient, "create_order"))
+check("客户端具备领券接口（严重#2）", hasattr(McdMcpClient, "auto_bind_coupons"))
+check("客户端具备个人订单接口（严重#2）", hasattr(McdMcpClient, "order_list"))
+check("客户端具备个人券接口（严重#2）", hasattr(McdMcpClient, "query_my_coupons"))
+check("客户端具备门店/券查询接口（严重#2）",
+      all(hasattr(McdMcpClient, n) for n in
+          ("query_nearby_stores", "query_store_coupons",
+           "available_coupons", "query_order")))
+
+# (3b) 下单参数校验必须真实生效（缺 takeWayCode / addressId 时必须报错）
+def _expect_mcd_error(fn, *a, **kw):
+    try:
+        fn(*a, **kw)
+    except McdMcpError:
+        return True
+    except Exception:                     # noqa: BLE001
+        return False
+    return False
+
+_sig_ok = True
+try:
+    _cli_stub = McdMcpClient.__new__(McdMcpClient)
+    _cli_stub.url, _cli_stub.timeout = "http://x", 1
+    _cli_stub.verbose, _cli_stub._id = False, 0
+    _cli_stub._session_id, _cli_stub.calls = None, []
+    _cli_stub._rpc = lambda *a, **k: {}          # 不应真被调用
+except Exception:                                # noqa: BLE001
+    _sig_ok = False
+check("下单参数校验：orderType=1 缺 takeWayCode 必须拒绝（严重#2）",
+      _sig_ok and _expect_mcd_error(
+          McdMcpClient.create_order, _cli_stub, "S1",
+          [{"productCode": "P1", "quantity": 1}], order_type=1, take_way_code=None),
+      "缺少 takeWayCode 时未抛出 McdMcpError")
+check("下单参数校验：orderType=2 缺 addressId 必须拒绝（严重#2）",
+      _sig_ok and _expect_mcd_error(
+          McdMcpClient.create_order, _cli_stub, "S1",
+          [{"productCode": "P1", "quantity": 1}], order_type=2, address_id=None),
+      "缺少 addressId 时未抛出 McdMcpError")
+check("下单参数校验：beType=6 缺 gmServiceCode 必须拒绝（严重#2）",
+      _sig_ok and _expect_mcd_error(
+          McdMcpClient.create_order, _cli_stub, "S1",
+          [{"productCode": "P1", "quantity": 1}], be_type=6, order_type=1,
+          take_way_code="T1", gm_service_code=None),
+      "缺少 gmServiceCode 时未抛出 McdMcpError")
 
 # (4) 中等#2：手选补差价按 choice.quantity 乘算
 _m_qty = Meal(code="QTY", name="多份补差套餐", price=1000)
@@ -1108,6 +1154,139 @@ check("单人模式无约束时仍显示「无限制」",
                              capture_output=True, text=True, encoding="utf-8",
                              cwd=_here).stdout or ""),
       "无约束时未显示 [无限制]")
+
+# ---------------------------------------------------------------------------
+# [20] 门店 / 优惠券 / 下单 / 支付状态（离线演示通路）
+# ---------------------------------------------------------------------------
+print("\n[20] 门店 · 优惠券 · 下单 · 支付状态")
+
+
+def _cli(*argv):
+    """跑一次 feast_cli（离线演示），返回合并输出。"""
+    r = _sp.run([sys.executable, _os.path.join(_here, "feast_cli.py")] + list(argv),
+                capture_output=True, text=True, encoding="utf-8", cwd=_here)
+    return (r.stdout or "") + (r.stderr or ""), r.returncode
+
+
+_o, _rc = _cli("--demo", "--stores", "--city", "示例市", "--keyword", "示例路")
+check("门店搜索：可按位置列出门店", "DEMO-0001" in _o and "storeCode" in _o
+      and _rc == 0, "未列出门店或返回码非 0")
+check("门店搜索：标注 beCode 规则（beType=1 不传 / 5 必传）",
+      "beType=1" in _o and "beType=5" in _o, "未提示 beCode 传参规则")
+check("门店搜索：离线演示不发起 MCP 调用",
+      "未发起任何 MCP 调用" in _o, "演示模式却声称发起了调用")
+
+_o, _rc = _cli("--demo", "--stores", "--favorites")
+check("门店搜索：--favorites 走收藏口径", "收藏门店" in _o and _rc == 0,
+      "--favorites 未生效")
+
+_o, _rc = _cli("--demo", "--stores")
+check("门店搜索：缺 --city/--keyword 时报错退出", _rc == 2,
+      "返回码 %d，应为 2" % _rc)
+
+_o, _rc = _cli("--demo", "--coupons", "--my-coupons")
+check("券查询：--my-coupons 走卡包口径并声明未校验门店",
+      "我的卡包券" in _o and "不做门店/订单校验" in _o, "卡包口径声明缺失")
+
+_o, _rc = _cli("--demo", "--coupons", "--available")
+check("券查询：--available 走可领取口径", "可领取" in _o, "可领取口径缺失")
+
+_o, _rc = _cli("--demo", "--coupons", "--store-code", "DEMO-0001")
+check("券查询：门店可用券口径", "DEMO-0001" in _o and "已校验门店" in _o,
+      "门店口径缺失")
+
+_o, _rc = _cli("--demo", "--coupons")
+check("券查询：未给 --store-code 时报错退出", _rc == 2,
+      "返回码 %d，应为 2" % _rc)
+
+_o, _rc = _cli("--demo", "--bind-coupons")
+check("一键领券：未加 --confirm 时拒绝执行", _rc == 2 and "写操作" in _o,
+      "未拦截未确认的写操作")
+
+_o, _rc = _cli("--demo", "--order", "--store-code", "DEMO-0001",
+               "--take-way-code", "TW123")
+check("下单：默认 DRY-RUN 且明确声明未真实下单",
+      "DRY-RUN" in _o and "未真实下单" in _o and _rc == 0, "dry-run 声明缺失")
+check("下单：报文含 storeCode/items/takeWayCode",
+      '"storeCode": "DEMO-0001"' in _o and '"items"' in _o
+      and '"takeWayCode": "TW123"' in _o, "报文字段缺失")
+check("下单：诚实声明 MCP 无支付工具",
+      "无独立支付工具" in _o and "官方渠道" in _o, "支付能力声明缺失")
+
+_o, _rc = _cli("--demo", "--order", "--store-code", "DEMO-0001")
+check("下单：缺 --take-way-code/--address-id 时报错退出", _rc == 2,
+      "返回码 %d，应为 2" % _rc)
+
+_o, _rc = _cli("--demo", "--order", "--store-code", "DEMO-0001",
+               "--take-way-code", "TW123", "--confirm")
+check("下单：演示模式 --confirm 仍不下单", "不会真实下单" in _o,
+      "演示模式疑似真实下单")
+
+_o, _rc = _cli("--demo", "--pay-status", "--order-id", "TEST123")
+check("支付状态：演示模式不查询真实订单",
+      "TEST123" in _o and "未发起任何 MCP 调用" in _o and _rc == 0,
+      "演示模式疑似查询了真实订单")
+
+_o, _rc = _cli("--pay-status")
+check("支付状态：缺 --order-id 时报错退出", _rc == 2,
+      "返回码 %d，应为 2" % _rc)
+
+_o, _rc = _cli("--demo", "--order", "--store-code", "DEMO-0001",
+               "--take-way-code", "TW9", "--json")
+check("下单：--json 输出可解析且含 dry_run 标记",
+      '"dry_run": true' in _o, "JSON 未含 dry_run")
+
+# 券/门店/下单三个命令的组合口径不得互相串线：
+# 只给 --coupons 时必须走门店口径，不能被 --available 抢走
+_o, _rc = _cli("--demo", "--coupons", "--available", "--my-coupons")
+check("券查询：同时给多个口径时优先卡包（可预期、不静默乱选）",
+      "我的卡包券" in _o, "多口径时行为不可预期")
+
+# ---------------------------------------------------------------------------
+# [21] 实测发现的解析缺陷回归（裸列表信封 + available-coupons 字段名差异）
+# ---------------------------------------------------------------------------
+print("\n[21] 实测解析缺陷回归")
+
+# (1) query-nearby-stores 实测返回**裸列表**（非 {success,data} 信封）。
+#     旧 _unwrap_payload 把非 dict 一律压成 {}，门店数据被静默丢光，
+#     表现为「明明有门店却报未找到」。
+import feast_cli as _fc                              # noqa: E402
+_raw_list = [{"storeCode": "S1", "storeName": "甲店", "address": "某路 1 号"},
+             {"storeCode": "S2", "storeName": "乙店", "address": "某路 2 号"}]
+_un = _fc._unwrap_payload(_raw_list)
+check("裸列表信封不得被压成空（实测缺陷）",
+      isinstance(_un, list) and len(_un) == 2,
+      "得到 %r" % (_un,))
+check("裸列表经 parse_stores 能解析出门店",
+      len(_parse_stores(_un)) == 2 and _parse_stores(_un)[0]["store_code"] == "S1",
+      "解析结果异常")
+check("信封 dict 仍能正常拆包", _fc._unwrap_payload(
+    {"success": True, "data": _raw_list}) == _raw_list, "信封拆包回归")
+check("失败的 envelope 仍会抛错", _expect_mcd_error(
+    _fc._unwrap_payload, {"success": False, "message": "x"}), "未抛错")
+
+# (2) available-coupons 实测字段为 couponName/couponStatus/label，
+#     与 query-store-coupons 的 title/couponId 不同；旧实现只认 title，
+#     于是券列表全变成「(无标题)」。
+_avail = _parse_coupons([
+    {"couponName": "麦旋风任选", "couponStatus": "HAVING_RECEIVE",
+     "label": "已领取", "couponImage": "https://x/y.png"},
+])
+check("available-coupons 的 couponName 能解析为标题（实测缺陷）",
+      len(_avail) == 1 and _avail[0]["title"] == "麦旋风任选",
+      "得到 %r" % (_avail[0]["title"] if _avail else None,))
+check("available-coupons 的 label/状态能保留",
+      _avail and _avail[0]["status"] == "HAVING_RECEIVE"
+      and _avail[0]["status_text"] == "已领取", "状态字段丢失")
+check("query-store-coupons 旧字段名仍兼容",
+      _parse_coupons([{"title": "满 30 减 5", "couponId": "C1",
+                       "couponCode": "P1"}])[0]["coupon_id"] == "C1",
+      "旧字段名解析回归")
+check("券解析对非 dict 元素健壮",
+      _parse_coupons([None, "x", {"title": "ok"}]) == [
+          {"title": "ok", "coupon_id": "", "coupon_code": "", "trade_time": "",
+           "status": None, "status_text": "", "promotion_tag": "", "image": "",
+           "products": []}], "非 dict 元素未跳过")
 
 # ---------------------------------------------------------------------------
 print("\n" + "=" * 70)

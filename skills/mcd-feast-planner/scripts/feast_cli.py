@@ -63,6 +63,121 @@ def load_sample_meals():
     return meals, raw.get("store", {})
 
 
+def _has_mcd_token():
+    """是否具备可用 Token。
+
+    判定顺序与 mcd_client 保持一致：环境变量优先；若本机存在可选的
+    密文凭据模块（mcd_secret）则视为可用。**不打印、不落盘任何明文。**
+    """
+    if os.environ.get("MCD_MCP_TOKEN"):
+        return True
+    if os.environ.get("MCD_TOKEN_FILE"):
+        return os.path.exists(os.environ["MCD_TOKEN_FILE"])
+    try:
+        import mcd_secret            # noqa: F401  （可选的本机密文凭据模块）
+        return True
+    except Exception:                # noqa: BLE001
+        return False
+
+
+def _live_query_stores(cli, args):
+    """定位门店：返回 (store, be_code) 或 (None, None)。
+
+    门店列表里只有 beType=5（得来速）/ 外送场景才带 beCode；到店自提
+    （beType=1）不带，此时 be_code 为 None 属正常。
+    """
+    if not args.city or not args.keyword:
+        print("真实调用需显式提供定位参数：--city <城市> --keyword <地标名>"
+              "（例如 --city <城市> --keyword <校区/写字楼/商圈名>），"
+              "程序会查询该位置附近的门店。")
+        return None, None
+    stores = cli.query_nearby_stores(city=args.city, keyword=args.keyword,
+                                     be_type=args.be_type)
+    if not stores:
+        print("  未找到门店（可换 --keyword，或确认 --be-type 是否正确）。")
+        return None, None
+    store = stores[0]
+    return store, store.get("beCode")
+
+
+def _prepare_live_meals(cli, args):
+    """真实模式共用数据准备：门店 → 菜单 → 详情 → 营养 → 补价 → 过滤。
+
+    返回 (store_code, meals, store)；任一步失败返回 (None, None, None)。
+    抽出来是为了让「多人配餐 / 单人自助 / 下单」三条链路共用同一份数据
+    获取逻辑，避免三处各写一遍导致行为漂移。
+    """
+    from normalize import (parse_menu_codes, parse_nutrition, build_meals,
+                           parse_price_result)
+
+    store, be_code = _live_query_stores(cli, args)
+    if store is None:
+        return None, None, None
+    store_code = store["storeCode"]
+    print("  → %s (storeCode=%s)" % (store["storeName"], store_code))
+
+    menu_raw = cli.query_meals(store_code, be_type=args.be_type,
+                               order_type=args.order_type, be_code=be_code)
+    entries = parse_menu_codes(menu_raw)
+    print("  → 菜单共 %d 个餐品" % len(entries))
+
+    details = {}
+    for e in entries[: args.max_detail]:
+        try:
+            d = cli.query_meal_detail(store_code, e["code"], be_type=args.be_type,
+                                      order_type=args.order_type, be_code=be_code)
+            if isinstance(d, dict):
+                details[e["code"]] = d
+        except Exception as ex:      # noqa: BLE001
+            if args.verbose:
+                print("    跳过 %s: %s" % (e["code"], ex))
+    print("  → 获取到 %d 个餐品详情" % len(details))
+
+    nut_raw = cli.list_nutrition_foods()
+    nutrition = parse_nutrition(nut_raw if isinstance(nut_raw, str) else "")
+    print("  → 营养表 %d 条" % len(nutrition))
+
+    meals = build_meals(entries, details, nutrition)
+
+    # 价格补齐：detail 中常无 price，用 calculate-price 逐项补
+    zero_price = [m for m in meals if m.price == 0]
+    failed = 0
+    if zero_price and not args.no_price_fill:
+        print("  → 补齐 %d 个餐品价格（逐个 calculate-price）" % len(zero_price))
+        for m in zero_price[: args.max_price_fill]:
+            try:
+                pr = parse_price_result(cli.calculate_price(
+                    store_code, [{"productCode": m.code, "quantity": 1}],
+                    be_type=args.be_type, order_type=args.order_type, be_code=be_code))
+                if pr["price"] > 0:
+                    m.price = pr["price"]
+                else:
+                    # ⚠️ Codex 审查：核价返回 0 是**静默失败**（字段名错/接口异常），
+                    #    旧实现直接忽略，会让"未核验价"混进正常方案。
+                    failed += 1
+            except Exception:        # noqa: BLE001
+                failed += 1
+        if failed:
+            print("  ⚠ 有 %d 个餐品核价未通过（price=0），已剔除或价格未核验"
+                  % failed)
+
+    # ⚠️ Codex 审查：菜单被 --max-detail 静默截断时，可能把"菜单范围外无解"
+    #    误报成"预算内无解"。此处显式报告覆盖率与被跳过数量。
+    tri_details = len(details)
+    tri_menu = len(entries)
+    if tri_details < tri_menu:
+        print("  ⚠ 菜单覆盖：%d/%d 个餐品已取详情，另有 %d 个未参与求解"
+              "（--max-detail=%d 可控）"
+              % (tri_details, tri_menu, tri_menu - tri_details, args.max_detail))
+    price_missing = len([m for m in meals if m.price == 0])
+    if price_missing:
+        print("  ⚠ 仍有 %d 个餐品价格未取得，已从候选中剔除" % price_missing)
+
+    meals = [m for m in meals if m.price > 0]
+    print("  → 可用餐品 %d 个（含价格）" % len(meals))
+    return store_code, meals, store
+
+
 # ---------------------------------------------------------------------------
 # 人员参数解析：  "小王:no_beef,no_spicy" 或 "小王"
 # ---------------------------------------------------------------------------
@@ -263,90 +378,15 @@ def run_demo(budget, people_specs, as_json):
 def run_live(args):
     """真实调用：定位门店 → 取菜单 → 补详情/营养 → 求解 → 核价。"""
     from mcd_client import McdMcpClient
-    from normalize import (parse_menu_codes, parse_nutrition, build_meals,
-                           parse_price_result, merge_nutrition)
+    from normalize import parse_price_result
 
     cli = McdMcpClient(verbose=args.verbose)
 
-    if not args.city or not args.keyword:
-        print("真实调用需显式提供定位参数：--city <城市> --keyword <地标名>"
-              "（例如 --city <城市> --keyword <校区/写字楼/商圈名>），"
-              "程序会查询该位置附近的门店。")
+    print("[1/5] 定位门店 / [2/5] 拉取菜单 / [3/5] 补全数据 …")
+    store_code, meals, store = _prepare_live_meals(cli, args)
+    if store_code is None:
         return 1
-
-    print("[1/5] 定位门店 …")
-    stores = cli.query_nearby_stores(city=args.city, keyword=args.keyword,
-                                     be_type=args.be_type)
-    if not stores:
-        print("  未找到门店。")
-        return 1
-    store = stores[0]
-    store_code = store["storeCode"]
     be_code = store.get("beCode")
-    print("  → %s (storeCode=%s)" % (store["storeName"], store_code))
-
-    print("[2/5] 拉取菜单 …")
-    menu_raw = cli.query_meals(store_code, be_type=args.be_type,
-                               order_type=args.order_type, be_code=be_code)
-    entries = parse_menu_codes(menu_raw)
-    print("  → 菜单共 %d 个餐品" % len(entries))
-
-    print("[3/5] 补全名称/价格与营养数据 …")
-    # 为控制调用量，只取前 N 个餐品详情（默认 60，可用 --max-detail 调整）
-    details = {}
-    for e in entries[: args.max_detail]:
-        try:
-            d = cli.query_meal_detail(store_code, e["code"],
-                                      be_type=args.be_type,
-                                      order_type=args.order_type, be_code=be_code)
-            if isinstance(d, dict):
-                details[e["code"]] = d
-        except Exception as ex:      # noqa: BLE001
-            if args.verbose:
-                print("    跳过 %s: %s" % (e["code"], ex))
-    print("  → 获取到 %d 个餐品详情" % len(details))
-
-    nut_raw = cli.list_nutrition_foods()
-    nutrition = parse_nutrition(nut_raw if isinstance(nut_raw, str) else "")
-    print("  → 营养表 %d 条" % len(nutrition))
-
-    meals = build_meals(entries, details, nutrition)
-    # 价格补齐：detail 中常无 price，用 calculate-price 逐项补
-    zero_price = [m for m in meals if m.price == 0]
-    if zero_price and not args.no_price_fill:
-        print("  → 补齐 %d 个餐品价格（逐个 calculate-price）" % len(zero_price))
-        failed = 0
-        for m in zero_price[: args.max_price_fill]:
-            try:
-                pr = parse_price_result(cli.calculate_price(
-                    store_code, [{"productCode": m.code, "quantity": 1}],
-                    be_type=args.be_type, order_type=args.order_type, be_code=be_code))
-                if pr["price"] > 0:
-                    m.price = pr["price"]
-                else:
-                    # ⚠️ Codex 审查：核价返回 0 是**静默失败**（字段名错/接口异常），
-                    #    旧实现直接忽略，会让"未核验价"混进正常方案。
-                    failed += 1
-            except Exception:        # noqa: BLE001
-                failed += 1
-        if failed:
-            print("  ⚠ 有 %d 个餐品核价未通过（price=0），已剔除或价格未核验"
-                  % failed)
-
-    # ⚠️ Codex 审查：菜单被 --max-detail 静默截断时，可能把"菜单范围外无解"
-    #    误报成"预算内无解"。此处显式报告覆盖率与被跳过数量。
-    tri_details = len(details)
-    tri_menu = len(entries)
-    if tri_details < tri_menu:
-        print("  ⚠ 菜单覆盖：%d/%d 个餐品已取详情，另有 %d 个未参与求解"
-              "（--max-detail=%d 可控）"
-              % (tri_details, tri_menu, tri_menu - tri_details, args.max_detail))
-    price_missing = len([m for m in meals if m.price == 0])
-    if price_missing:
-        print("  ⚠ 仍有 %d 个餐品价格未取得，已从候选中剔除" % price_missing)
-
-    meals = [m for m in meals if m.price > 0]
-    print("  → 可用餐品 %d 个（含价格）" % len(meals))
 
     print("[4/5] 求解多人方案 …")
     people = [parse_person(s) for s in args.people]
@@ -410,56 +450,20 @@ def run_live(args):
 # 麦麦 1+1 自助（单人模式）
 # ---------------------------------------------------------------------------
 def _load_meals_for_solo(args):
-    """自助模式的数据来源：--demo 读离线样例，否则走真实 MCP。"""
+    """自助模式的数据来源：--demo 读离线样例，否则走真实 MCP。
+
+    返回 (meals, store, cli)；失败时 meals 为 None，cli 仍返回以便打印调用统计。
+    """
     if args.demo:
         meals, store = load_sample_meals()
         return meals, store, None
 
     from mcd_client import McdMcpClient
-    from normalize import (parse_menu_codes, parse_nutrition, build_meals,
-                           parse_price_result)
 
     cli = McdMcpClient(verbose=args.verbose)
-    if not args.city or not args.keyword:
-        print("真实调用需显式提供定位参数：--city <城市> --keyword <地标名>。")
+    store_code, meals, store = _prepare_live_meals(cli, args)
+    if store_code is None:
         return None, None, cli
-    stores = cli.query_nearby_stores(city=args.city, keyword=args.keyword,
-                                     be_type=args.be_type)
-    if not stores:
-        print("  未找到门店。")
-        return None, None, cli
-    store = stores[0]
-    store_code = store["storeCode"]
-    be_code = store.get("beCode")
-    menu_raw = cli.query_meals(store_code, be_type=args.be_type,
-                               order_type=args.order_type, be_code=be_code)
-    entries = parse_menu_codes(menu_raw)
-
-    details = {}
-    for e in entries[: args.max_detail]:
-        try:
-            d = cli.query_meal_detail(store_code, e["code"], be_type=args.be_type,
-                                      order_type=args.order_type, be_code=be_code)
-            if isinstance(d, dict):
-                details[e["code"]] = d
-        except Exception:                        # noqa: BLE001
-            pass
-
-    nut_raw = cli.list_nutrition_foods()
-    nutrition = parse_nutrition(nut_raw if isinstance(nut_raw, str) else "")
-    meals = build_meals(entries, details, nutrition)
-
-    # 补价（自助模式下只补 0 价的，控制调用量）
-    for m in [x for x in meals if x.price == 0][: args.max_price_fill]:
-        try:
-            pr = parse_price_result(cli.calculate_price(
-                store_code, [{"productCode": m.code, "quantity": 1}],
-                be_type=args.be_type, order_type=args.order_type, be_code=be_code))
-            if pr["price"] > 0:
-                m.price = pr["price"]
-        except Exception:                        # noqa: BLE001
-            pass
-    meals = [m for m in meals if m.price > 0]
     return meals, {"storeCode": store_code, "storeName": store["storeName"]}, cli
 
 
@@ -628,6 +632,424 @@ def run_solo(args, demo: bool):
     return 0
 
 
+def _make_client(args):
+    """构造真实 MCP 客户端（仅在这些命令里按需导入，保持离线演示零依赖）。"""
+    from mcd_client import McdMcpClient
+    return McdMcpClient(verbose=getattr(args, "verbose", False))
+
+
+def _unwrap_payload(raw):
+    """把 MCP 返回值统一拆到业务 payload。
+
+    ⚠️ 返回类型**不固定**：信封印版是 {success,code,data}，但
+       query-nearby-stores 直接返回**裸列表**（实测）。旧实现把非 dict
+       一律压成 {}，导致真实门店数据被静默丢弃、误报「未找到门店」。
+       现在保留 list 原样返回，交由各 parse_* 自行处理。
+    """
+    from mcd_client import McdMcpClient
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+    if isinstance(raw, dict) and "success" in raw:
+        return McdMcpClient._unwrap(raw)
+    if isinstance(raw, list):
+        return raw
+    return raw if isinstance(raw, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# 演示模式下的门店 / 券样例（无 Token 也能看输出格式）
+# ---------------------------------------------------------------------------
+_DEMO_STORES = [
+    {"store_code": "DEMO-0001", "store_name": "麦当劳示例门店（甲）",
+     "address": "示例市示例区示例路 1 号", "be_code": None, "phone": "000-0000-0000"},
+    {"store_code": "DEMO-0002", "store_name": "麦当劳示例门店（乙）",
+     "address": "示例市示例区示例路 2 号", "be_code": None, "phone": "000-0000-0001"},
+    {"store_code": "DEMO-0005", "store_name": "麦当劳示例得来速餐厅",
+     "address": "示例市示例区示例大道 5 号", "be_code": "BE-DEMO-5",
+     "phone": "000-0000-0002"},
+]
+_DEMO_COUPONS = [
+    {"title": "【演示】满 30 减 5", "coupon_code": "CPN-DEMO-30-5",
+     "coupon_id": "CID-DEMO-1", "trade_time": "2026-01-01 ~ 2026-12-31",
+     "promotion_tag": "演示券", "status": "可领取", "products": []},
+    {"title": "【演示】指定套餐立减 3 元", "coupon_code": "CPN-DEMO-COMBO-3",
+     "coupon_id": "CID-DEMO-2", "trade_time": "2026-01-01 ~ 2026-12-31",
+     "promotion_tag": "演示券", "status": "可领取",
+     "products": [{"code": "DEMO-P1", "name": "精选超值随心配"}]},
+]
+
+
+# ---------------------------------------------------------------------------
+# 门店搜索
+# ---------------------------------------------------------------------------
+def run_stores(args) -> int:
+    """搜索门店：--favorites 查收藏；否则按 --city/--keyword 搜索。
+
+    ⚠️ beType=1（到店自取）返回的门店**没有** beCode，后续调用不得传；
+       beType=5（得来速）返回的门店有 beCode，后续调用必须传。
+    """
+    from normalize import parse_stores
+
+    # ⚠️ 参数校验对 demo / 真实模式**一视同仁**：否则演示时能跑通、真跑时
+    #    才报错，用户会以为是自己环境的问题。（自测 [20] 已覆盖此点）
+    if args.favorites:
+        search_type = 1
+        if args.be_type not in (1, 5):
+            print("--favorites 仅支持 --be-type 1（到店自取）或 5（得来速）。")
+            return 2
+    else:
+        search_type = 2
+        if not args.city or not args.keyword:
+            print("按位置搜索门店需要同时提供 --city 与 --keyword。")
+            print('  例：python feast_cli.py --stores --city <城市> --keyword <地标名>')
+            print("  （查收藏门店请改用 --favorites）")
+            return 2
+
+    if args.demo:
+        stores = [dict(s) for s in _DEMO_STORES]
+        if args.favorites:
+            stores = stores[:2]
+        if not args.favorites and args.be_type == 5:
+            stores = [s for s in stores if s["be_code"]]
+        cli = None
+    else:
+        cli = _make_client(args)
+        cli.connect()
+        raw = cli.query_nearby_stores(args.city, args.keyword,
+                                      be_type=args.be_type, search_type=search_type)
+        stores = parse_stores(_unwrap_payload(raw))
+
+    if args.json:
+        print(json.dumps(stores, ensure_ascii=False, indent=2))
+        return 0
+
+    print("=" * 74)
+    print("  附近门店  [%s%s]"
+          % ("收藏门店" if args.favorites else "按位置搜索",
+             " · 离线演示样例" if args.demo else ""))
+    print("=" * 74)
+    if not stores:
+        print("  未找到门店。请确认 --city / --keyword 是否准确。")
+        return 0
+    for i, s in enumerate(stores, 1):
+        line = "  %d. %s" % (i, s["store_name"] or "(未命名门店)")
+        print(line)
+        if s["store_code"]:
+            print("     storeCode = %s" % s["store_code"])
+        if s["be_code"]:
+            print("     beCode    = %s   ← 后续调用必须传" % s["be_code"])
+        elif args.be_type == 5:
+            print("     beCode    = (该门店未返回 beCode)")
+        if s["address"]:
+            print("     地址：%s" % s["address"])
+        if s["phone"]:
+            print("     电话：%s" % s["phone"])
+    print()
+    print("  下一步：用 storeCode 查菜单/券，例如")
+    print("    python feast_cli.py --coupons --store-code <storeCode>")
+    print("  ⚠️ 到店自取(beType=1) 不传 beCode；得来速(beType=5) 必须传 beCode。")
+    if cli is None:
+        print("  （离线演示样例，未发起任何 MCP 调用）")
+    else:
+        print("  MCP 调用：%d 次" % cli.call_count)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 优惠券
+# ---------------------------------------------------------------------------
+def run_coupons(args) -> int:
+    """券查询/领取。三种口径必须分清，避免误导：
+       · query-store-coupons —— 当前**门店**下可用（下单用这个）
+       · query-my-coupons    —— 卡包中**已拥有**，不做门店校验
+       · available-coupons   —— 当前**可领取**（尚未领取）
+    """
+    from normalize import parse_coupons
+
+    if args.demo:
+        cli = None
+        if args.bind_coupons and not args.confirm:
+            print("一键领券是【写操作】，会真实改变账户券资产。")
+            print("确认后请追加 --confirm 重跑：")
+            print("  python feast_cli.py --bind-coupons --confirm")
+            return 2
+        coupons = [dict(c) for c in _DEMO_COUPONS]
+        if args.my_coupons:
+            title = "我的卡包券（不做门店/订单校验，不承诺可用于当前订单）· 离线演示样例"
+        elif args.available:
+            title = "当前可领取的券（尚未领取）· 离线演示样例"
+        elif args.bind_coupons:
+            title = "一键领券结果 · 离线演示样例（未真实执行）"
+        else:
+            if not args.store_code:
+                print("查询门店可用券需要 --store-code。")
+                print("  （查卡包用 --my-coupons；查可领取用 --available）")
+                return 2
+            title = ("门店 %s 可用券（已校验门店/渠道/配送规则）· 离线演示样例"
+                     % args.store_code)
+        if args.json:
+            print(json.dumps(coupons, ensure_ascii=False, indent=2))
+            return 0
+        print("=" * 74)
+        print("  %s" % title)
+        print("=" * 74)
+        for i, c in enumerate(coupons, 1):
+            suffix = ("（%s）" % c["status_text"]) if c.get("status_text") else ""
+            print("  %d. %s%s" % (i, c["title"] or "(无标题)", suffix))
+            if c["coupon_code"] or c["coupon_id"]:
+                print("     couponCode = %s   couponId = %s"
+                      % (c["coupon_code"] or "-", c["coupon_id"] or "-"))
+            if c["trade_time"]:
+                print("     有效期：%s" % c["trade_time"])
+            if c["products"]:
+                names = "、".join((p["name"] or p["code"] or "?")
+                                  for p in c["products"][:6])
+                print("     适用商品：%s" % names)
+        print()
+        print("  ⚠️ 口径说明：把 couponId/couponCode 传入 calculate-price 可得到**券后价**；")
+        print("     卡包券(query-my-coupons) 未经门店校验，实际能否使用以下单结果为准。")
+        print("  （离线演示样例，未发起任何 MCP 调用）")
+        return 0
+
+    cli = _make_client(args)
+    cli.connect()
+
+    # 一键领券：写操作，需 --confirm
+    if args.bind_coupons:
+        if not args.confirm:
+            print("一键领券是【写操作】，会真实改变账户券资产。")
+            print("确认后请追加 --confirm 重跑：")
+            print("  python feast_cli.py --bind-coupons --confirm")
+            return 2
+        raw = cli.auto_bind_coupons()
+        print("=" * 74)
+        print("  一键领券结果")
+        print("=" * 74)
+        print("  %s" % json.dumps(_unwrap_payload(raw), ensure_ascii=False)[:500])
+        print("  MCP 调用：%d 次" % cli.call_count)
+        return 0
+
+    if args.my_coupons:
+        raw = cli.query_my_coupons()
+        coupons = parse_coupons(_unwrap_payload(raw))
+        title = "我的卡包券（不做门店/订单校验，不承诺可用于当前订单）"
+    elif args.available:
+        raw = cli.available_coupons()
+        coupons = parse_coupons(_unwrap_payload(raw))
+        title = "当前可领取的券（尚未领取）"
+    else:
+        store_code = args.store_code
+        if not store_code:
+            print("查询门店可用券需要 --store-code。")
+            print("  （查卡包用 --my-coupons；查可领取用 --available）")
+            return 2
+        raw = cli.query_store_coupons(store_code, be_type=args.be_type,
+                                      order_type=args.order_type,
+                                      be_code=args.be_code)
+        coupons = parse_coupons(_unwrap_payload(raw))
+        title = "门店 %s 可用券（已校验门店/渠道/配送规则）" % store_code
+
+    if args.json:
+        print(json.dumps(coupons, ensure_ascii=False, indent=2))
+        return 0
+
+    print("=" * 74)
+    print("  %s" % title)
+    print("=" * 74)
+    if not coupons:
+        print("  没有查到券。")
+        return 0
+    for i, c in enumerate(coupons, 1):
+        suffix = ("（%s）" % c["status_text"]) if c.get("status_text") else ""
+        print("  %d. %s%s" % (i, c["title"] or "(无标题)", suffix))
+        if c["coupon_code"] or c["coupon_id"]:
+            print("     couponCode = %s   couponId = %s"
+                  % (c["coupon_code"] or "-", c["coupon_id"] or "-"))
+        if c["trade_time"]:
+            print("     有效期：%s" % c["trade_time"])
+        if c["promotion_tag"]:
+            print("     促销标签：%s" % c["promotion_tag"])
+        if c["products"]:
+            names = "、".join((p["name"] or p["code"] or "?") for p in c["products"][:6])
+            print("     适用商品：%s%s"
+                  % (names, " 等" if len(c["products"]) > 6 else ""))
+    print()
+    print("  ⚠️ 口径说明：把 couponId/couponCode 传入 calculate-price 可得到**券后价**；")
+    print("     卡包券(query-my-coupons) 未经门店校验，实际能否使用以下单结果为准。")
+    print("  MCP 调用：%d 次" % cli.call_count)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 创建订单（写操作，默认 dry-run）
+# ---------------------------------------------------------------------------
+def run_order(args) -> int:
+    """创建订单。**默认只打印将要提交的报文（dry-run）**，加 --confirm 才真实下单。
+
+    ⚠️ 到店(orderType=1) 必传 takeWayCode（来自 calculate-price 的 takeWayList）；
+       外送(orderType=2) 必传 addressId。
+    ⚠️ 麦当劳 MCP **没有独立支付工具**：下单后订单处于待支付态，
+       支付需在麦当劳官方渠道完成，之后用 --pay-status 复核。
+    """
+    store_code = args.store_code
+    cli = None
+    if not store_code:
+        if args.demo:
+            # 演示模式允许省略 --store-code，用样例门店占位
+            store_code = _DEMO_STORES[0]["store_code"]
+        else:
+            print("下单需要 --store-code。")
+            print("  可先用 `--stores --city <城市> --keyword <地标名>` 查门店编码。")
+            return 2
+    if not args.take_way_code and not args.address_id:
+        print("缺少下单所需参数：")
+        print("  · 到店(orderType=1)：需要 --take-way-code（来自 calculate-price 的 takeWayList）")
+        print("  · 外送(orderType=2)：需要 --address-id")
+        return 2
+
+    # 用本地方案生成 items（与展示口径一致）
+    if args.demo:
+        meals, store = load_sample_meals()
+    else:
+        cli = _make_client(args)
+        out = _prepare_live_meals(cli, args)
+        if out is None:
+            return 1
+        store_code, meals, store = out
+
+    people = [parse_person(p) for p in args.people]
+    req = FeastRequest(people=people, budget_per_person=args.budget,
+                       store_code=store_code,
+                       store_name=(store or {}).get("storeName"),
+                       be_type=args.be_type, order_type=args.order_type,
+                       be_code=args.be_code)
+    result = solve(req, meals)
+    if not result.plans:
+        print("未求得可行方案，无法下单。")
+        if result.infeasible_reason:
+            print("  原因：%s" % result.infeasible_reason)
+        return 1
+
+    plan = result.plans[0]
+    # ⚠️ 官方购物车 schema 要求同一 productCode 聚合数量，不能重复列出
+    agg = {}
+    for a in plan.assignments:
+        for m, q in a.items:
+            agg[m.code] = agg.get(m.code, 0) + q
+    items = [{"productCode": c, "quantity": q} for c, q in agg.items()]
+
+    payload = {"storeCode": store_code, "beType": args.be_type,
+               "orderType": args.order_type, "items": items}
+    if args.take_way_code:
+        payload["takeWayCode"] = args.take_way_code
+    if args.address_id:
+        payload["addressId"] = args.address_id
+    if args.be_code:
+        payload["beCode"] = args.be_code
+
+    if args.json:
+        print(json.dumps({"dry_run": not args.confirm, "payload": payload,
+                          "plan": plan.title,
+                          "total_cost_yuan": round(plan.total_cost / 100.0, 2)},
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    print("=" * 74)
+    print("  创建订单  %s" % ("[真实下单]" if args.confirm else "[DRY-RUN 预演]"))
+    print("=" * 74)
+    print("  门店：%s" % (store_code or "-"))
+    print("  场景：beType=%s  orderType=%s  方案：%s"
+          % (args.be_type, args.order_type, plan.title))
+    print("  明细：")
+    for c, q in agg.items():
+        print("    · %s ×%d" % (c, q))
+    print("  合计：¥%.2f" % (plan.total_cost / 100.0))
+    print()
+    print("  将提交的报文：")
+    print("  %s" % json.dumps(payload, ensure_ascii=False))
+
+    if not args.confirm:
+        print()
+        print("  ⚠️ 当前为 DRY-RUN，**未真实下单**。确认无误后追加 --confirm 执行。")
+        print("  ⚠️ 下单后订单为待支付状态；麦当劳 MCP 无独立支付工具，")
+        print("     请在麦当劳官方渠道完成支付，再用 --pay-status 复核。")
+        return 0
+
+    if args.demo:
+        print()
+        print("  ⚠️ 离线演示模式**不会真实下单**（--demo 下 --confirm 仅演示流程）。")
+        print("     去掉 --demo 并配置 Token 后可真实创建订单。")
+        return 0
+
+    if cli is None:
+        cli = _make_client(args)
+    cli.connect()
+    raw = cli.create_order(
+        store_code, items, be_type=args.be_type, order_type=args.order_type,
+        be_code=args.be_code, take_way_code=args.take_way_code,
+        address_id=args.address_id)
+    from normalize import parse_order_result
+    res = parse_order_result(_unwrap_payload(raw))
+    print()
+    print("  下单结果：")
+    print("    订单号：%s" % (res["order_id"] or "(未返回)"))
+    print("    状态　：%s %s" % (res["status"], res["status_text"]))
+    if res["price"]:
+        print("    金额　：¥%.2f" % (res["price"] / 100.0))
+    print()
+    print("  ⚠️ 支付说明：MCP 无支付工具。请在**麦当劳官方渠道**完成支付；")
+    print("     之后用 `--pay-status --order-id <订单号>` 复核支付状态。")
+    print("  MCP 调用：%d 次" % cli.call_count)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 支付状态查询
+# ---------------------------------------------------------------------------
+def run_pay_status(args) -> int:
+    """查询订单支付状态（这是 MCP 侧唯一与"支付"相关的真实能力）。"""
+    if not args.order_id:
+        print("查询支付状态需要 --order-id。")
+        return 2
+    if args.demo:
+        print("=" * 74)
+        print("  订单支付状态  [离线演示样例]")
+        print("=" * 74)
+        print("  订单号：%s" % args.order_id)
+        print("  状态　：演示模式不查询真实订单（未发起任何 MCP 调用）")
+        print()
+        print("  ⚠️ 麦当劳 MCP 无独立支付工具，本项目**不代收款项、不代付款**。")
+        return 0
+    cli = _make_client(args)
+    cli.connect()
+    raw = cli.query_order(args.order_id)
+    from normalize import parse_order_result
+    res = parse_order_result(_unwrap_payload(raw))
+
+    if args.json:
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0
+
+    print("=" * 74)
+    print("  订单支付状态")
+    print("=" * 74)
+    print("  订单号：%s" % args.order_id)
+    print("  状态　：%s %s" % (res["status"] or "(未返回)", res["status_text"]))
+    if res["price"]:
+        print("  金额　：¥%.2f" % (res["price"] / 100.0))
+    if res["pay_url"]:
+        print("  支付链接：%s" % res["pay_url"])
+    else:
+        print("  支付链接：(接口未返回) —— 请在麦当劳官方渠道完成支付")
+    print()
+    print("  ⚠️ 麦当劳 MCP 无独立支付工具，本项目**不代收款项、不代付款**。")
+    print("  MCP 调用：%d 次" % cli.call_count)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="麦麦攒局 · 麦当劳聚餐众筹点餐助手（基于麦当劳 MCP）")
@@ -666,21 +1088,78 @@ def main():
                       help='手选（两种写法）："蓝区=1120,粉区=3050" 或 "1120,3050"')
     solo.add_argument("--solo-recommend", action="store_true", dest="solo_recommend",
                       help="自动推荐多套 1+1（含换件），而非手选")
+
+    # ---- 门店 / 优惠券 / 下单 / 支付状态 ----
+    shop = ap.add_argument_group("门店 · 优惠券 · 下单 · 支付状态（需真实 Token）")
+    shop.add_argument("--stores", action="store_true",
+                      help="搜索附近门店（配合 --city/--keyword，或 --favorites 查收藏）")
+    shop.add_argument("--favorites", action="store_true",
+                      help="查询收藏门店（searchType=1），而非按位置搜索")
+    shop.add_argument("--coupons", action="store_true",
+                      help="查询券：默认查「当前门店可用券」；加 --my-coupons 查卡包；"
+                           "加 --available 查可领取券")
+    shop.add_argument("--my-coupons", action="store_true", dest="my_coupons",
+                      help="查本人卡包中的券（不做门店校验）")
+    shop.add_argument("--available", action="store_true",
+                      help="查当前可领取的券")
+    shop.add_argument("--bind-coupons", action="store_true", dest="bind_coupons",
+                      help="一键领取麦麦省全部可用券（写操作，需 --confirm）")
+    shop.add_argument("--store-code", default=None, dest="store_code",
+                      help="门店编码（--coupons / --order 时用）")
+    shop.add_argument("--be-code", default=None, dest="be_code",
+                      help="业务编码（beType=5/6 或外送时必传）")
+    shop.add_argument("--order", action="store_true",
+                      help="按当前方案创建订单（写操作；默认 dry-run，加 --confirm 才真实下单）")
+    shop.add_argument("--take-way-code", default=None, dest="take_way_code",
+                      help="到店自取所需的取餐码（来自 calculate-price 的 takeWayList）")
+    shop.add_argument("--address-id", default=None, dest="address_id",
+                      help="外送所需的配送地址 ID")
+    shop.add_argument("--confirm", action="store_true",
+                      help="确认执行写操作（下单 / 领券）")
+    shop.add_argument("--order-id", default=None, dest="order_id",
+                      help="订单号（配合 --pay-status 查询支付状态）")
+    shop.add_argument("--pay-status", action="store_true", dest="pay_status",
+                      help="查询指定订单的支付状态（--order-id 必填）")
     args = ap.parse_args()
 
+    # ---- 无需门店数据的轻量命令优先处理 ----
+    if args.pay_status:
+        return run_pay_status(args)
+    if args.available or args.my_coupons or args.bind_coupons:
+        return run_coupons(args)
+
+    # ⚠️ --stores / --coupons / --order 可在 --demo 下运行（无 Token 也可预演），
+    #    因此必须先于 demo 分支判断，否则 --demo --order 会被 demo 分支吞掉。
     if args.demo:
+        if args.stores:
+            return run_stores(args)
+        if args.coupons:
+            return run_coupons(args)
+        if args.order:
+            return run_order(args)
         if args.solo:
             return run_solo(args, demo=True)
         run_demo(args.budget, args.people, args.json)
         return 0
 
-    if not os.environ.get("MCD_MCP_TOKEN"):
-        print("未检测到环境变量 MCD_MCP_TOKEN。")
+    if not _has_mcd_token():
+        print("未检测到麦当劳 MCP Token。")
         print("  1) 前往 https://open.mcd.cn/mcp 申请 Token")
-        print("  2) export MCD_MCP_TOKEN=你的token   (Windows: set MCD_MCP_TOKEN=...)")
+        print("  2) 通过环境变量注入：export MCD_MCP_TOKEN=你的token"
+              "  (Windows: set MCD_MCP_TOKEN=...)")
+        print("     或使用本机 DPAPI 密文凭据 "
+              "C:\\Users\\<用户名>\\.workbuddy\\secrets\\mcd_mcp_token.cred")
         print("  或先运行离线演示：python feast_cli.py --demo"
               "（自助模式：--demo --solo）")
         return 2
+
+    # ---- 需要门店的写/查命令 ----
+    if args.stores:
+        return run_stores(args)
+    if args.coupons:
+        return run_coupons(args)
+    if args.order:
+        return run_order(args)
 
     if args.solo:
         return run_solo(args, demo=False)

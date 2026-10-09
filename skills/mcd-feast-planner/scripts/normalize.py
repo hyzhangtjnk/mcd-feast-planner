@@ -525,22 +525,88 @@ def parse_price_result(payload: Dict) -> Dict:
 
 
 def parse_coupons(payload) -> List[Dict]:
-    """解析 query-store-coupons / query-my-coupons 返回。"""
+    """解析 query-store-coupons / query-my-coupons / available-coupons 返回。
+
+    ⚠️ 三个接口的字段名**并不一致**（实测）：
+       · query-store-coupons —— title / couponId / couponCode / promotionTag
+       · available-coupons   —— couponName / couponStatus / label / couponImage
+       · query-my-coupons    —— title（与 store 版接近）
+    旧实现只认 title/name，于是 available-coupons 全部退化成「(无标题)」，
+    用户看到一列空白券。这里把三套字段名都收敛到同一结构。
+    """
     if isinstance(payload, dict):
-        payload = payload.get("list") or payload.get("coupons") or []
+        payload = (payload.get("list") or payload.get("coupons")
+                   or payload.get("data") or [])
     out = []
     for c in (payload or []):
+        if not isinstance(c, dict):
+            continue
+        raw_status = c.get("couponStatus") or c.get("status")
+        # label 是给人看的文案（"已领取"/"去使用"），优先展示；否则回落到原始枚举
+        status_text = c.get("label") or raw_status or ""
         out.append({
-            "title": c.get("title") or c.get("name") or "",
-            "coupon_id": c.get("couponId") or "",
-            "coupon_code": c.get("couponCode") or "",
-            "trade_time": c.get("tradeDateTime") or "",
+            "title": (c.get("title") or c.get("couponName") or c.get("name")
+                      or ""),
+            "coupon_id": c.get("couponId") or c.get("id") or "",
+            "coupon_code": c.get("couponCode") or c.get("code") or "",
+            "trade_time": c.get("tradeDateTime") or c.get("validTime") or "",
+            "status": raw_status,
+            "status_text": status_text,
+            "promotion_tag": c.get("promotionTag") or "",
+            "image": c.get("couponImage") or "",
             "products": [
                 {"code": p.get("productCode"), "name": p.get("productName")}
-                for p in (c.get("products") or [])
+                for p in (c.get("products") or []) if isinstance(p, dict)
             ],
         })
     return out
+
+
+def parse_stores(payload) -> List[Dict]:
+    """解析 query-nearby-stores / delivery-query-stores 返回。
+
+    统一归一为 [{"store_code", "store_name", "address", "be_code", "phone"}]。
+    ⚠️ beCode 只在 beType=5（得来速）/ 外送场景返回；到店自取(beType=1) 为空，
+       此时后续工具调用**不得**传 beCode。
+    """
+    if isinstance(payload, dict):
+        payload = (payload.get("stores") or payload.get("list")
+                   or payload.get("storeList") or [])
+    out = []
+    for s in (payload or []):
+        if not isinstance(s, dict):
+            continue
+        out.append({
+            "store_code": s.get("storeCode") or "",
+            "store_name": s.get("storeName") or s.get("name") or "",
+            "address": s.get("address") or s.get("storeAddress") or "",
+            "be_code": s.get("beCode") or "",
+            "phone": s.get("phone") or s.get("telephone") or "",
+        })
+    return out
+
+
+def parse_order_result(payload) -> Dict:
+    """解析 create-order / query-order 返回。
+
+    返回统一结构；**pay_url / order_id 可能为空**——官方 schema 未承诺固定字段名，
+    故对多个候选键做兼容取值，缺失时如实留空，不臆造。
+    """
+    payload = payload or {}
+    if isinstance(payload, dict) and "data" in payload and isinstance(payload["data"], dict):
+        inner = payload["data"]
+    else:
+        inner = payload if isinstance(payload, dict) else {}
+    return {
+        "order_id": (inner.get("orderId") or inner.get("order_id")
+                     or inner.get("orderNo") or ""),
+        "pay_url": (inner.get("payUrl") or inner.get("pay_url")
+                    or inner.get("paymentUrl") or ""),
+        "status": inner.get("status") or inner.get("orderStatus") or "",
+        "status_text": inner.get("statusText") or inner.get("statusDesc") or "",
+        "price": _to_int(inner.get("price")) or 0,
+        "raw": inner,
+    }
 
 
 # ---------------------------------------------------------------------------

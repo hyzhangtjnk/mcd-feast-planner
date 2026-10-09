@@ -335,22 +335,91 @@ class McdMcpClient:
         return self.call_tool("query-store-coupons", args)
 
     def available_coupons(self):
+        """用户当前**可领取**的麦麦省券列表（尚未领取）。"""
         return self.call_tool("available-coupons", {})
+
+    def query_my_coupons(self, page="1", page_size="200"):
+        """用户卡包中**已拥有**的券资产。
+
+        ⚠️ 官方明确：本接口**不做门店/渠道/配送方式的下单规则校验**，
+           不承诺该券可用于当前订单。要判断「当前门店/当前订单可用券」，
+           必须改用 query_store_coupons()。
+        """
+        return self.call_tool("query-my-coupons",
+                              {"page": page, "pageSize": page_size})
+
+    def auto_bind_coupons(self):
+        """一键领取麦麦省全部当前可用券（**写操作**）。
+
+        ⚠️ 写操作：会真实改变用户账户的券资产。默认不由主流程调用，
+           仅在用户显式确认「帮我领券」时执行。
+        """
+        return self.call_tool("auto-bind-coupons", {})
+
+    # ---------------- 下单与订单（写操作，需用户显式确认）----------------
+
+    def create_order(self, store_code, items, be_type=1, order_type=1,
+                     be_code=None, take_way_code=None, address_id=None,
+                     reservation_date=None, gm_service_code=None):
+        """创建麦当劳订单（**写操作**）。
+
+        参数规则（严格对齐官方 schema）：
+          · orderType=1（到店）：必传 takeWayCode —— 取值来自
+            calculate_price() 返回的 data.takeWayList[].code
+          · orderType=2（外送）：必传 addressId
+          · beType=5（得来速）/ 6（团餐）/ orderType=2 → 必传 beCode
+          · beType=6（团餐）→ 必传 gmServiceCode（来自 query-meal-assistance）
+          · items[] 中可带 couponId / couponCode 使用优惠券
+
+        ⚠️ 本方法**不会**自动执行。CLI 侧默认仅打印将要提交的报文（dry-run），
+           必须用户显式加 --confirm 才会真实下单。
+        """
+        args = {"storeCode": store_code, "beType": be_type,
+                "orderType": order_type, "items": items}
+        _attach_becode(args, be_type, order_type, be_code)
+        if order_type == 1:
+            if not take_way_code:
+                raise McdMcpError(
+                    "orderType=1（到店）必须提供 takeWayCode，"
+                    "它来自 calculate-price 返回的 data.takeWayList[].code"
+                )
+            args["takeWayCode"] = take_way_code
+        else:
+            if not address_id:
+                raise McdMcpError("orderType=2（外送）必须提供 addressId")
+            args["addressId"] = address_id
+        if be_type == 6:
+            if not gm_service_code:
+                raise McdMcpError("beType=6（团餐）必须提供 gmServiceCode")
+            args["gmServiceCode"] = gm_service_code
+        if reservation_date:
+            args["reservationDate"] = reservation_date
+        return self.call_tool("create-order", args)
+
+    def query_order(self, order_id):
+        """查询订单详情与**支付状态**（用户说"我已支付/支付失败"时用它复核）。"""
+        return self.call_tool("query-order", {"orderId": order_id})
+
+    def order_list(self):
+        """查询本人麦当劳历史订单（不含商城订单）。"""
+        return self.call_tool("order-list", {})
 
     def list_nutrition_foods(self):
         """获取餐品营养数据（160 条），返回原始字符串（TSV 形式）。"""
         return self.call_tool("list-nutrition-foods", {})
 
     # ------------------------------------------------------------------
-    # 写操作与个人数据接口：**有意不提供**
+    # 关于「支付」的诚实说明（务必保留）
     #
-    # ⚠️ Codex 复审3 严重#2：本客户端原先保留了 auto_bind_coupons（领券）、
-    #    create_order（下单）、order_list / query_my_coupons（读个人订单与券）等方法，
-    #    这与提交物中「只读设计 · 不调用任何写操作的 MCP 工具」的声明直接矛盾 ——
-    #    一旦被 Skill/LLM 或后续调用方复用，就可能真的领券或创建订单。
-    #    为避免「声明与能力不一致」以及越权触碰个人数据，此处**移除**这些接口。
-    #    本项目定位是「只算不买」：只做菜单查询、营养查询、试算价格与方案优化，
-    #    真正的下单与领券请由用户在麦当劳官方渠道自行完成。
+    # 麦当劳 MCP 服务端**没有独立的支付工具**（已实测 tools/list 全量 35 个工具）。
+    # 真实链路是：
+    #   1) create-order 生成订单 → 返回订单号，此时订单处于**待支付**状态；
+    #   2) 用户在**麦当劳官方渠道**（麦当劳 App / 小程序 / 门店）完成支付；
+    #   3) 用 query-order(orderId) 复核支付状态（已支付 / 支付失败 / 配送进度）。
+    #
+    # 因此本项目的能力边界是「**下单到待支付为止**」：
+    # 能创建订单、能核价、能选券、能查支付结果，但**不代收款项、不代付款**。
+    # 这是接口能力的事实边界，不是实现缺失 —— 任何声称「代付」的表述都是误导。
     # ------------------------------------------------------------------
 
     @property
