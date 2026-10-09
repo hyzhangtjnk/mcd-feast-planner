@@ -100,7 +100,8 @@ mcd-feast-planner/
 ├── docs/demo.html                  可视化演示页
 ├── MCP_INTEGRATION.md              MCP 接入细节与踩坑
 ├── mcp-config.example.json         MCP 配置示例
-├── CONTEST_DECLARATION.md          参赛声明
+├── CONTEST_DECLARATION.md          参赛声明（官方原文，未改动）
+├── REVIEW_NOTES.md                 三轮交叉审查与修复记录（自撰补充材料）
 └── workbuddy.md                     WorkBuddy 协作记录
 ```
 
@@ -183,7 +184,7 @@ mcd-feast-planner/
 | 11 | `beCode` 漏 beType=6 团餐 | ✅ 已修 + 断言 |
 | 12 | 素食漏「酥酥多笋卷」（自测端到端发现） | ✅ 已修 + 断言 |
 
-详见 `CONTEST_DECLARATION.md` 与 `workbuddy.md`。
+详见 `REVIEW_NOTES.md` 与 `workbuddy.md`。
 
 ---
 

@@ -150,7 +150,8 @@ AGY 审查跑了 31 分钟。用后台任务执行，
 | 文件 | 作用 |
 |---|---|
 | `README.md` | 项目总览、快速开始、设计理念 |
-| `CONTEST_DECLARATION.md` | 参赛声明、原创性、审查与修复全过程 |
+| `CONTEST_DECLARATION.md` | 参赛声明（官方原文，未改动） |
+| `REVIEW_NOTES.md` | 三轮交叉审查与修复全过程记录 |
 | `MCP_INTEGRATION.md` | MCP 接入细节与 7 类真实踩坑 |
 | `mcp-config.example.json` | MCP 配置示例（不含真实 Token） |
 | `workbuddy.md` | 本文档：协作过程记录 |
