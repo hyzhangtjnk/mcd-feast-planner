@@ -5,7 +5,7 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0%20(stdlib%20only)-green.svg)](https://docs.python.org/3/library/)
-[![Tests](https://img.shields.io/badge/selftest-204%20passed-brightgreen.svg)](skills/mcd-feast-planner/scripts/selftest.py)
+[![Tests](https://img.shields.io/badge/selftest-208%20passed-brightgreen.svg)](skills/mcd-feast-planner/scripts/selftest.py)
 [![MCP](https://img.shields.io/badge/MCP-streamable--http-orange.svg)](https://open.mcd.cn/mcp)
 [![WorkBuddy](https://img.shields.io/badge/built%20with-WorkBuddy-purple.svg)](workbuddy.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -96,7 +96,7 @@ python feast_cli.py --demo --solo --meal 9900013304 --me "我:不吃牛" \
 # 4. 单人 1+1 控卡与口味自动推荐
 python feast_cli.py --demo --solo --me "我:减脂,prefer=咖啡" --solo-recommend
 
-# 5. 运行全量离线自动化测试套件（204 条断言）
+# 5. 运行全量离线自动化测试套件（208 条断言）
 python selftest.py
 ```
 
@@ -206,7 +206,7 @@ mcd-feast-planner/
 │       ├── feast_engine.py         # 多人组合求解算法与多策略择优引擎
 │       ├── solo_engine.py          # 单人 1+1 随心配识别、冲突校验与低卡推荐
 │       ├── feast_cli.py            # 统一命令行交互入口（支持离线与在线双模式）
-│       ├── selftest.py             # 全量自动化回归自测试卷（204 条断言）
+│       ├── selftest.py             # 全量自动化回归自测试卷（208 条断言）
 │       ├── sample_data/meals.json  # 真实抓取的脱敏门店餐品快照（107 餐品 / 63 套餐）
 │       └── tools/                  # 离线数据补充与维护工具
 ├── docs/
@@ -226,7 +226,7 @@ mcd-feast-planner/
 
 | 检验项目 | 检验方式 | 结果 |
 |---|---|---|
-| 自动化离线测试 | 执行 `python selftest.py` | **204 项断言全部通过，0 失败** |
+| 自动化离线测试 | 执行 `python selftest.py` | **208 项断言全部通过，0 失败** |
 | 忌口防漏网扫描 | 10 种忌口规则 × 全量餐品展开备选后逐一核验 | **737 个餐品实例，0 漏网** |
 | AA 分摊精确性 | 随机人数 × 随机金额大样本蒙特卡洛测试 | **4000 组随机测试，0 误差** |
 | 极端规模响应 | 10 人场景组合搜索压力测试 | **20 秒内有界收敛，无死循环** |

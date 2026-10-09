@@ -84,7 +84,7 @@ python feast_cli.py --demo --solo --me "我:减脂,prefer=咖啡" --solo-recomme
 | `feast_engine.py` | 多人组合搜索引擎、多策略择优（性价比 / 轻负担 / 豪华） |
 | `solo_engine.py` | 单人 1+1 识别、备选区冲突标注、手选校验、智能推荐 |
 | `feast_cli.py` | 统一命令行交互入口 |
-| `selftest.py` | 离线自动化测试套件（204 条断言） |
+| `selftest.py` | 离线自动化测试套件（208 条断言） |
 
 ## 关键设计约定
 
@@ -98,5 +98,5 @@ python feast_cli.py --demo --solo --me "我:减脂,prefer=咖啡" --solo-recomme
 
 ```bash
 python selftest.py
-# 结果：204 通过 / 0 失败
+# 结果：208 通过 / 0 失败
 ```

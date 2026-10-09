@@ -540,11 +540,18 @@ def run_solo(args, demo: bool):
     print("=" * 74)
     print("  麦麦 1+1 自助  [%s]" % ("离线演示" if demo else "真实调用 · %s" % store_name))
     print("=" * 74)
-    print("  本人：%s%s"
-          % (person.name,
-             ("[%s]" % "、".join(person.diet_labels())) if person.diet else "[无限制]"))
+    # 标签展示：把「饮食忌口」与「营养约束」合并成一个字符串，
+    # 避免出现「我:减脂」已生效（设了热量上限）却显示「[无限制]」的误导。
+    _labels = list(person.diet_labels())
     if person.max_calories:
-        print("  热量上限：%d 千卡" % person.max_calories)
+        _labels.append("热量≤%d千卡" % person.max_calories)
+    if person.min_protein:
+        _labels.append("蛋白≥%g克" % person.min_protein)
+    if person.preference:
+        _labels.append("偏好=%s" % person.preference)
+    labels_text = "、".join(_labels) if _labels else "无限制"
+
+    print("  本人：%s[%s]" % (person.name, labels_text))
     print()
 
     ones = find_one_plus_one(meals)

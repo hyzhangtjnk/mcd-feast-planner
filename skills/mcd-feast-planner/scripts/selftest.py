@@ -1077,6 +1077,39 @@ check("normalize 死代码已清理（轻微#4）",
       "仍存在未引用的死代码函数")
 
 # ---------------------------------------------------------------------------
+# [19] 单人模式约束标签展示（迁移到 skill 库时发现）
+# ---------------------------------------------------------------------------
+print("\n[19] 单人模式约束标签展示")
+
+# 「减脂」在单人模式被映射为热量上限（不进 diet），旧版展示只读 diet_labels()
+# 于是已生效的约束却显示「[无限制]」，属误导性展示。现要求标签涵盖营养/偏好。
+import io as _io                                       # noqa: E402
+import contextlib as _ctx                              # noqa: E402
+import subprocess as _sp                               # noqa: E402
+import os as _os                                       # noqa: E402
+
+_here = _os.path.dirname(_os.path.abspath(__file__))
+_r = _sp.run([sys.executable, _os.path.join(_here, "feast_cli.py"),
+              "--demo", "--solo", "--me", "我:减脂,prefer=咖啡"],
+             capture_output=True, text=True, encoding="utf-8", cwd=_here)
+_out = (_r.stdout or "") + (_r.stderr or "")
+check("单人模式展示热量约束（非「无限制」）",
+      "热量≤650千卡" in _out,
+      "输出未见热量约束标签")
+check("单人模式展示偏好约束",
+      "偏好=咖啡" in _out,
+      "输出未见偏好标签")
+check("单人模式不再误显「无限制」",
+      "[无限制]" not in _out,
+      "仍出现误导性的 [无限制]")
+check("单人模式无约束时仍显示「无限制」",
+      "[无限制]" in (_sp.run([sys.executable, _os.path.join(_here, "feast_cli.py"),
+                              "--demo", "--solo", "--me", "我"],
+                             capture_output=True, text=True, encoding="utf-8",
+                             cwd=_here).stdout or ""),
+      "无约束时未显示 [无限制]")
+
+# ---------------------------------------------------------------------------
 print("\n" + "=" * 70)
 print("结果：%d 通过 / %d 失败" % (len(PASSED), len(FAILED)))
 if FAILED:
