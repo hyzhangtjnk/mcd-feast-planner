@@ -1,0 +1,18 @@
+{
+  "$comment": "麦当劳官方 MCP 配置示例。复制到 WorkBuddy 的 ~/.workbuddy/mcp.json 的 mcpServers 下，或按你的客户端文档放置。注意：本文件仅示例，不含真实 Token。",
+  "mcpServers": {
+    "mcd-mcp": {
+      "type": "streamable-http",
+      "url": "https://mcp.mcd.cn",
+      "headers": {
+        "Authorization": "Bearer ${MCD_MCP_TOKEN}"
+      },
+      "$notes": [
+        "Token 申请地址：https://open.mcd.cn/mcp",
+        "请勿把真实 Token 写进本文件并提交到仓库；用环境变量 MCD_MCP_TOKEN 注入。",
+        "本项目脚本不依赖此配置即可运行（--demo 用内置真实快照）。",
+        "若客户端不支持环境变量插值，请在本地放置真实值，并把本文件加入 .gitignore。"
+      ]
+    }
+  }
+}

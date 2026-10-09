@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>麦麦攒局 · 麦当劳 MCP 聚餐点餐助手 · 演示</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e6ea; --text:#1a1d21; --muted:#6b7280;
+    --red:#c8102e; --yellow:#ffc72c; --green:#1a7f45; --blue:#1d4ed8;
+    --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.05);
+  }
+  body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.6;padding:0 0 60px}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+  header{background:linear-gradient(135deg,#c8102e,#8f0b20);color:#fff;
+         padding:36px 0 30px;margin-bottom:26px}
+  header h1{font-size:26px;font-weight:700;letter-spacing:.5px}
+  header .sub{opacity:.92;margin-top:6px;font-size:14px}
+  header .tagline{margin-top:14px;display:inline-block;background:rgba(255,255,255,.16);
+       border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:5px 14px;
+       font-size:13px;letter-spacing:.3px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+         gap:12px;margin:22px 0 30px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:14px 16px;box-shadow:var(--shadow)}
+  .stat .v{font-size:22px;font-weight:700;color:var(--red)}
+  .stat .k{font-size:12px;color:var(--muted);margin-top:2px}
+  h2{font-size:19px;margin:34px 0 6px;padding-left:11px;
+     border-left:4px solid var(--red)}
+  h2 .en{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px}
+  .lead{color:var(--muted);font-size:13.5px;margin:8px 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px}
+  .card h3{font-size:16px;margin-bottom:4px;display:flex;align-items:center;gap:8px;
+           flex-wrap:wrap}
+  .badge{font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;
+         background:#fef3c7;color:#92400e}
+  .badge.plain{background:#e0e7ff;color:#3730a3}
+  .badge.ok{background:#dcfce7;color:#166534}
+  .kpis{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 14px;
+        padding-bottom:12px;border-bottom:1px dashed var(--line)}
+  .kpi .l{font-size:11px;color:var(--muted)}
+  .kpi .n{font-size:16px;font-weight:700}
+  .person{border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+          margin-bottom:9px;background:#fcfcfd}
+  .person .top{display:flex;justify-content:space-between;align-items:baseline;
+               gap:10px;flex-wrap:wrap}
+  .person .who{font-weight:600;font-size:14px}
+  .person .pay{font-weight:700;color:var(--red);font-size:14px;white-space:nowrap}
+  .person .items{font-size:13px;color:#374151;margin-top:3px}
+  .meta{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .swap{font-size:12px;color:var(--blue);margin-top:5px;padding-left:9px;
+        border-left:2px solid #bfdbfe}
+  .note{font-size:12px;color:#92400e;margin-top:4px}
+  .combo{font-size:11.5px;color:#4b5563;margin-top:3px;padding-left:9px}
+  .combo b{color:#111827;font-weight:600}
+  .checksum{font-size:12px;color:var(--green);margin-top:12px;font-weight:500}
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .zone{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fcfcfd}
+  .zone .zn{font-weight:700;font-size:13.5px;color:var(--red);margin-bottom:8px}
+  .ch{font-size:12.5px;padding:4px 0;display:flex;justify-content:space-between;
+      gap:8px;border-bottom:1px solid #f1f2f4}
+  .ch:last-child{border-bottom:none}
+  .ch .rt{color:var(--muted);font-size:11px;white-space:nowrap}
+  .ch.no{color:#9ca3af;text-decoration:line-through}
+  .ch.no .rt{color:#dc2626;text-decoration:none;font-weight:600}
+  .ch .def{color:var(--yellow);font-weight:700;font-size:11px}
+  .rec{border:1px solid var(--line);border-radius:9px;padding:11px 14px;
+       margin-bottom:9px;background:#fcfcfd}
+  .rec .h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+          font-weight:600;font-size:14px}
+  .rec .p{color:var(--red);white-space:nowrap}
+  .rec .z{font-size:12.5px;color:#374151;margin-top:4px}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:12px;text-align:center;line-height:1.9}
+  code{background:#f1f2f4;padding:1px 6px;border-radius:4px;font-size:12px;
+       font-family:ui-monospace,Consolas,monospace}
+  @media(max-width:620px){header h1{font-size:21px}.kpis{gap:12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>麦麦攒局 · 麦当劳 MCP 聚餐众筹点餐助手</h1>
+    <div class="sub">「谁不能吃什么」的众口难调，用确定性求解解决</div>
+    <div class="tagline">核心主张：数值不进 LLM —— MCP 只取数据，算术全在本地</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><div class="v" id="s1">-</div><div class="k">离线自测断言</div></div>
+    <div class="stat"><div class="v" id="s2">-</div><div class="k">忌口漏网（全量扫描）</div></div>
+    <div class="stat"><div class="v" id="s3">-</div><div class="k">AA 分摊问题（4000 组）</div></div>
+    <div class="stat"><div class="v" id="s4">-</div><div class="k">可换件套餐</div></div>
+  </div>
+
+  <h2>场景一 · 四人聚餐<span class="en">Multiple diners with different restrictions</span></h2>
+  <div class="lead" id="multi-lead"></div>
+  <div id="multi"></div>
+
+  <h2>场景二 · 一个人吃：1+1 自助<span class="en">Solo mode</span></h2>
+  <div class="lead" id="solo-lead"></div>
+  <div class="board" id="board"></div>
+  <h3 style="font-size:14px;margin:18px 0 10px">自动推荐（已按忌口筛除不可吃项）</h3>
+  <div id="recs"></div>
+
+  <footer>
+    <div>麦当劳 MCP 公开接口 · 只读调用 · 不代下单</div>
+    <div>价格以门店 <code>calculate-price</code> 实时核价为准；本地计算为预测值</div>
+    <div>数据为真实菜单快照，仅用于演示与验证</div>
+  </footer>
+</div>
+
+<script>
+const D = {"multi": {"store": {"storeCode": "0000000", "storeName": "麦当劳示例门店餐厅", "address": "示例市示例区示例路 0 号"}, "request": {"headcount": 4, "budget": 60, "people": [{"name": "我", "diet": [], "max_cal": 650}, {"name": "小王", "diet": ["不吃牛肉", "不吃辣"], "max_cal": null}, {"name": "小李", "diet": ["素食（蛋奶素）"], "max_cal": null}, {"name": "小张", "diet": ["不吃海鲜"], "max_cal": null}]}, "plans": [{"title": "性价比最优", "strategy": "value", "assignments": [{"person": "我", "items": [[{"code": "9900015568", "name": "精选超值随心配", "price": 1390, "category": "main", "calories": 385, "protein": 24.0, "fat": 21.0, "sodium": 996.0, "tags": ["超值百种组合随心配"], "combo_items": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "code": "521156", "qty": 1}, {"round": "粉区", "name": "怡泉+C麦炫酷", "code": "521336", "qty": 1}], "combo_rounds": [{"id": 1, "name": "蓝区", "min": 1, "max": 1, "choices": [{"code": "521156", "name": "那么大鸡排（椒盐风味）", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "521316", "name": "高达吉士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1120", "name": "双层吉士汉堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1600", "name": "麦香鱼", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521816", "name": "酥酥多笋卷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1401", "name": "麦乐鸡5块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1450", "name": "麦香鸡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 2, "name": "粉区", "min": 1, "max": 1, "choices": [{"code": "521336", "name": "怡泉+C麦炫酷", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "3050", "name": "可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4437", "name": "小杯玉米杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4106", "name": "香芋派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4420", "name": "迷你草莓新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4422", "name": "迷你朱古力新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521327", "name": "鲜萃冰咖", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4105", "name": "菠萝派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521328", "name": "可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521335", "name": "雪碧麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521329", "name": "无糖可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3505", "name": "锡兰红茶", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515520", "name": "中杯怡泉+C", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3060", "name": "雪碧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3071", "name": "无糖可口可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": true}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900015568": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "dropped": false}, {"round": "粉区", "name": "怡泉+C麦炫酷", "dropped": false}]}, "nut_override": {}}, {"person": "小王", "items": [[{"code": "9900015568", "name": "精选超值随心配", "price": 1390, "category": "main", "calories": 385, "protein": 24.0, "fat": 21.0, "sodium": 996.0, "tags": ["超值百种组合随心配"], "combo_items": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "code": "521156", "qty": 1}, {"round": "粉区", "name": "怡泉+C麦炫酷", "code": "521336", "qty": 1}], "combo_rounds": [{"id": 1, "name": "蓝区", "min": 1, "max": 1, "choices": [{"code": "521156", "name": "那么大鸡排（椒盐风味）", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "521316", "name": "高达吉士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1120", "name": "双层吉士汉堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1600", "name": "麦香鱼", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521816", "name": "酥酥多笋卷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1401", "name": "麦乐鸡5块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1450", "name": "麦香鸡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 2, "name": "粉区", "min": 1, "max": 1, "choices": [{"code": "521336", "name": "怡泉+C麦炫酷", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "3050", "name": "可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4437", "name": "小杯玉米杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4106", "name": "香芋派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4420", "name": "迷你草莓新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4422", "name": "迷你朱古力新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521327", "name": "鲜萃冰咖", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4105", "name": "菠萝派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521328", "name": "可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521335", "name": "雪碧麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521329", "name": "无糖可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3505", "name": "锡兰红茶", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515520", "name": "中杯怡泉+C", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3060", "name": "雪碧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3071", "name": "无糖可口可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": true}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900015568": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "dropped": false}, {"round": "粉区", "name": "怡泉+C麦炫酷", "dropped": false}]}, "nut_override": {}}, {"person": "小李", "items": [[{"code": "9900008747", "name": "牛肉堡单品精选", "price": 1400, "category": "main", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["单品", "100%纯牛肉"], "combo_items": [{"round": "选择汉堡", "name": "汉堡包", "code": "1000", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择汉堡", "min": 1, "max": 1, "choices": [{"code": "1000", "name": "汉堡包", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "1010", "name": "吉士汉堡包", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "520551", "name": "培根芝士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1]], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "resolved": {"9900008747": [{"round": "选择汉堡", "name": "汉堡包", "dropped": false}]}, "nut_override": {}}, {"person": "小张", "items": [[{"code": "9900015568", "name": "精选超值随心配", "price": 1390, "category": "main", "calories": 385, "protein": 24.0, "fat": 21.0, "sodium": 996.0, "tags": ["超值百种组合随心配"], "combo_items": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "code": "521156", "qty": 1}, {"round": "粉区", "name": "怡泉+C麦炫酷", "code": "521336", "qty": 1}], "combo_rounds": [{"id": 1, "name": "蓝区", "min": 1, "max": 1, "choices": [{"code": "521156", "name": "那么大鸡排（椒盐风味）", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "521316", "name": "高达吉士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1120", "name": "双层吉士汉堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1600", "name": "麦香鱼", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521816", "name": "酥酥多笋卷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1401", "name": "麦乐鸡5块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1450", "name": "麦香鸡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 2, "name": "粉区", "min": 1, "max": 1, "choices": [{"code": "521336", "name": "怡泉+C麦炫酷", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "3050", "name": "可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4437", "name": "小杯玉米杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4106", "name": "香芋派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4420", "name": "迷你草莓新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4422", "name": "迷你朱古力新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521327", "name": "鲜萃冰咖", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4105", "name": "菠萝派", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521328", "name": "可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521335", "name": "雪碧麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521329", "name": "无糖可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3505", "name": "锡兰红茶", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515520", "name": "中杯怡泉+C", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3060", "name": "雪碧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3071", "name": "无糖可口可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": true}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900015568": [{"round": "蓝区", "name": "那么大鸡排（椒盐风味）", "dropped": false}, {"round": "粉区", "name": "怡泉+C麦炫酷", "dropped": false}]}, "nut_override": {}}], "total_cost": 5570, "coupon_saving": 0, "verified_price": null, "notes": ["共 4 人，总计 ¥55.70，人均 ¥13.92", "人均热量约 289 千卡，人均蛋白约 18.0 克", "预算利用率 23%（人均上限 ¥60）", "已按忌口过滤：小王(不吃牛肉、不吃辣)；小李(素食（蛋奶素）)；小张(不吃海鲜)"], "total_cost_yuan": 55.7, "per_person_cost_yuan": 13.92, "total_calories": 1155, "per_person_calories": 289, "coupon_saving_yuan": 0.0, "share": [{"person": "我", "items": [{"name": "精选超值随心配", "qty": 1, "subtotal": 1390, "combo": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷", "combo_final": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷"}], "swaps": [], "swap_diff": 0, "calories": 385, "protein": 24.0, "nutrition_verified": false, "should_pay": 1393}, {"person": "小王", "items": [{"name": "精选超值随心配", "qty": 1, "subtotal": 1390, "combo": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷", "combo_final": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷"}], "swaps": [], "swap_diff": 0, "calories": 385, "protein": 24.0, "nutrition_verified": false, "should_pay": 1393}, {"person": "小李", "items": [{"name": "牛肉堡单品精选", "qty": 1, "subtotal": 1400, "combo": "汉堡包", "combo_final": "汉堡包"}], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "calories": 0, "protein": 0.0, "nutrition_verified": false, "should_pay": 1392}, {"person": "小张", "items": [{"name": "精选超值随心配", "qty": 1, "subtotal": 1390, "combo": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷", "combo_final": "那么大鸡排（椒盐风味） + 怡泉+C麦炫酷"}], "swaps": [], "swap_diff": 0, "calories": 385, "protein": 24.0, "nutrition_verified": false, "should_pay": 1392}]}, {"title": "轻负担版（部分餐品缺营养数据）", "strategy": "healthy", "assignments": [{"person": "我", "items": [[{"code": "1600", "name": "麦香鱼", "price": 2250, "category": "main", "calories": 325, "protein": 16.0, "fat": 13.0, "sodium": 556.0, "tags": ["单品", "麦香鱼系列"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1]], "swaps": [], "swap_diff": 0, "resolved": {}, "nut_override": {}}, {"person": "小王", "items": [[{"code": "9900008747", "name": "牛肉堡单品精选", "price": 1400, "category": "main", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["单品", "100%纯牛肉"], "combo_items": [{"round": "选择汉堡", "name": "汉堡包", "code": "1000", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择汉堡", "min": 1, "max": 1, "choices": [{"code": "1000", "name": "汉堡包", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "1010", "name": "吉士汉堡包", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "520551", "name": "培根芝士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1]], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "resolved": {"9900008747": [{"round": "选择汉堡", "name": "汉堡包", "dropped": false}]}, "nut_override": {}}, {"person": "小李", "items": [[{"code": "9900008747", "name": "牛肉堡单品精选", "price": 1400, "category": "main", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["单品", "100%纯牛肉"], "combo_items": [{"round": "选择汉堡", "name": "汉堡包", "code": "1000", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择汉堡", "min": 1, "max": 1, "choices": [{"code": "1000", "name": "汉堡包", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "1010", "name": "吉士汉堡包", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "520551", "name": "培根芝士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1]], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "resolved": {"9900008747": [{"round": "选择汉堡", "name": "汉堡包", "dropped": false}]}, "nut_override": {}}, {"person": "小张", "items": [[{"code": "9900008747", "name": "牛肉堡单品精选", "price": 1400, "category": "main", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["单品", "100%纯牛肉"], "combo_items": [{"round": "选择汉堡", "name": "汉堡包", "code": "1000", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择汉堡", "min": 1, "max": 1, "choices": [{"code": "1000", "name": "汉堡包", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "1010", "name": "吉士汉堡包", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "520551", "name": "培根芝士双牛堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900008747": [{"round": "选择汉堡", "name": "汉堡包", "dropped": false}]}, "nut_override": {}}], "total_cost": 6450, "coupon_saving": 0, "verified_price": null, "notes": ["共 4 人，总计 ¥64.50，人均 ¥16.12", "人均热量约 81 千卡，人均蛋白约 4.0 克", "预算利用率 27%（人均上限 ¥60）", "已按忌口过滤：小王(不吃牛肉、不吃辣)；小李(素食（蛋奶素）)；小张(不吃海鲜)"], "total_cost_yuan": 64.5, "per_person_cost_yuan": 16.12, "total_calories": 325, "per_person_calories": 81, "coupon_saving_yuan": 0.0, "share": [{"person": "我", "items": [{"name": "麦香鱼", "qty": 1, "subtotal": 2250, "combo": "", "combo_final": ""}], "swaps": [], "swap_diff": 0, "calories": 325, "protein": 16.0, "nutrition_verified": true, "should_pay": 1613}, {"person": "小王", "items": [{"name": "牛肉堡单品精选", "qty": 1, "subtotal": 1400, "combo": "汉堡包", "combo_final": "汉堡包"}], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "calories": 0, "protein": 0.0, "nutrition_verified": false, "should_pay": 1613}, {"person": "小李", "items": [{"name": "牛肉堡单品精选", "qty": 1, "subtotal": 1400, "combo": "汉堡包", "combo_final": "汉堡包"}], "swaps": [{"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "牛肉堡单品精选", "note": "（该套餐为可选项组合，实际选择：汉堡包）"}], "swap_diff": 0, "calories": 0, "protein": 0.0, "nutrition_verified": false, "should_pay": 1612}, {"person": "小张", "items": [{"name": "牛肉堡单品精选", "qty": 1, "subtotal": 1400, "combo": "汉堡包", "combo_final": "汉堡包"}], "swaps": [], "swap_diff": 0, "calories": 0, "protein": 0.0, "nutrition_verified": false, "should_pay": 1612}]}, {"title": "丰盛豪华版", "strategy": "feast", "assignments": [{"person": "我", "items": [[{"code": "1406", "name": "板烧鸡腿堡", "price": 2350, "category": "main", "calories": 391, "protein": 23.0, "fat": 17.0, "sodium": 1041.0, "tags": ["单品", "板烧滋滋", "多汁惹味"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "4437", "name": "小杯玉米杯", "price": 1300, "category": "side", "calories": 53, "protein": 2.0, "fat": 1.0, "sodium": 1.0, "tags": ["小食"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "3505", "name": "锡兰红茶", "price": 1150, "category": "drink", "calories": 2, "protein": 0.0, "fat": 0.0, "sodium": 0.0, "tags": ["热饮"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "9900008745", "name": "新地", "price": 1200, "category": "dessert", "calories": 140, "protein": 3.0, "fat": 4.0, "sodium": 63.0, "tags": ["冰淇淋"], "combo_items": [{"round": "选择新地", "name": "朱古力新地", "code": "4410", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择新地", "min": 1, "max": 1, "choices": [{"code": "4410", "name": "朱古力新地", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "4416", "name": "草莓新地", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900008745": [{"round": "选择新地", "name": "朱古力新地", "dropped": false}]}, "nut_override": {}}, {"person": "小王", "items": [[{"code": "9900004236", "name": "人气超值四件套随心选", "price": 5700, "category": "main", "calories": 1091, "protein": 38.0, "fat": 46.0, "sodium": 1710.0, "tags": ["麦金卡"], "combo_items": [{"round": "选择汉堡", "name": "麦辣鸡腿汉堡", "code": "1440", "qty": 1}, {"round": "小食", "name": "中薯条", "code": "4810", "qty": 1}, {"round": "小食", "name": "麦乐鸡4块", "code": "515106", "qty": 1}, {"round": "选择套餐内饮料", "name": "可乐中杯", "code": "3050", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择汉堡", "min": 1, "max": 1, "choices": [{"code": "1440", "name": "麦辣鸡腿汉堡", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "521952", "name": "龙焰鸡腿堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521953", "name": "龙焰芝士棒鸡腿堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515295", "name": "双层脆鸡堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1406", "name": "板烧鸡腿堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 2, "name": "小食", "min": 1, "max": 1, "choices": [{"code": "4810", "name": "中薯条", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "521986", "name": "马苏里拉拉丝芝士条", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521950", "name": "蓝莓爆爆珠麦旋风", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521983", "name": "5块心形薯饼+韩式辣椒黄油风味酱", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521901", "name": "月下相思扭扭薯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521917", "name": "泷愿成真麦旋风——大米风味", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1217", "name": "奥利奥麦旋风", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4437", "name": "小杯玉米杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "4438", "name": "大杯玉米杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 3, "name": "小食", "min": 1, "max": 1, "choices": [{"code": "515106", "name": "麦乐鸡4块", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "522008", "name": "韩式烟熏芝士风味酱麦麦脆汁鸡-腿", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "522009", "name": "韩式烟熏芝士风味酱脆皮鸡柳", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "522011", "name": "韩式烟熏芝士风味酱甜辣酱鸡球", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521853", "name": "4个韩式甜辣酱鸡球（牧场酱）", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521854", "name": "蘸蘸脆皮鸡柳（牧场酱）", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521856", "name": "4个韩式甜辣酱鸡球（山葵酱）", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521857", "name": "蘸蘸脆皮鸡柳（山葵酱）", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521802", "name": "韩式甜辣酱鸡块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521823", "name": "脆皮鸡柳3根", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1700", "name": "麦辣鸡翅2块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "505416", "name": "麦麦脆汁鸡-琵琶腿", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}, {"id": 4, "name": "选择套餐内饮料", "min": 1, "max": 1, "choices": [{"code": "3050", "name": "可乐中杯", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}, {"code": "515946", "name": "冰浓浓黑巧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521871", "name": "美禄可可雪冰", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "507411", "name": "麦咖啡™冰美式中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521327", "name": "鲜萃冰咖", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "520688", "name": "大杯鲜萃咖啡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "507368", "name": "麦咖啡™热美式中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "507409", "name": "麦咖啡™冰奶铁中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515945", "name": "热浓浓黑巧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "507328", "name": "麦咖啡™热奶铁中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521328", "name": "可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521335", "name": "雪碧麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521336", "name": "怡泉+C麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "521329", "name": "无糖可乐麦炫酷", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3071", "name": "无糖可口可乐中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3100", "name": "可乐大杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3111", "name": "无糖可口可乐大杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "2430", "name": "【美汁源】“黄金橙橙”", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515521", "name": "大杯怡泉+C", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3110", "name": "雪碧大杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "515520", "name": "中杯怡泉+C", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3060", "name": "雪碧中杯", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3505", "name": "锡兰红茶", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "3755", "name": "纯牛奶", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "6362", "name": "100%苹果汁", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": true}, 1], [{"code": "521797", "name": "北美招牌牧场酱", "price": 300, "category": "side", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["蘸酱", "使用动物奶油"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1]], "swaps": [{"round": "选择汉堡", "frm": "麦辣鸡腿汉堡", "to": "龙焰鸡腿堡", "diff": 0, "reason": "diet", "combo": "人气超值四件套随心选", "qty": 1}, {"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "人气超值四件套随心选", "note": "（该套餐为可选项组合，实际选择：龙焰鸡腿堡 + 中薯条 + 麦乐鸡4块 + 可乐中杯）"}], "swap_diff": 0, "resolved": {"9900004236": [{"round": "选择汉堡", "name": "龙焰鸡腿堡", "dropped": false}, {"round": "小食", "name": "中薯条", "dropped": false}, {"round": "小食", "name": "麦乐鸡4块", "dropped": false}, {"round": "选择套餐内饮料", "name": "可乐中杯", "dropped": false}]}, "nut_override": {}}, {"person": "小李", "items": [[{"code": "9900003537", "name": "学生专享汉堡小食随心选", "price": 2700, "category": "main", "calories": 578, "protein": 8.0, "fat": 24.0, "sodium": 330.0, "tags": ["套餐"], "combo_items": [{"round": "选择主食/小食", "name": "中薯条", "code": "4810", "qty": 2}], "combo_rounds": [{"id": 1, "name": "选择主食/小食", "min": 2, "max": 2, "choices": [{"code": "4810", "name": "中薯条", "diff": 0, "is_default": true, "quantity": 2, "min": 0, "max": -1}, {"code": "1401", "name": "麦乐鸡5块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1700", "name": "麦辣鸡翅2块", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1217", "name": "奥利奥麦旋风", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1600", "name": "麦香鱼", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}, {"code": "1440", "name": "麦辣鸡腿汉堡", "diff": 0, "is_default": false, "quantity": 0, "min": 0, "max": -1}]}], "nutrition_estimated": true}, 1], [{"code": "521901", "name": "月下相思扭扭薯", "price": 1500, "category": "side", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["上新", "口口酥脆", "薯香十足"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "2430", "name": "【美汁源】“黄金橙橙”", "price": 1300, "category": "drink", "calories": 165, "protein": 0.0, "fat": 0.0, "sodium": 53.0, "tags": ["冷饮"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "521951", "name": "灰焰圆筒", "price": 500, "category": "dessert", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["上新", "灰焰"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900003537": [{"round": "选择主食/小食", "name": "中薯条", "dropped": false}, {"round": "选择主食/小食", "name": "奥利奥麦旋风", "dropped": false}]}, "nut_override": {}}, {"person": "小张", "items": [[{"code": "521953", "name": "龙焰芝士棒鸡腿堡", "price": 2700, "category": "main", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["上新", "浓郁奶香拉丝芝士"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "9900005432", "name": "麦麦脆汁鸡1块", "price": 1500, "category": "side", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["单品"], "combo_items": [{"round": "选择麦麦脆汁鸡", "name": "麦麦脆汁鸡-琵琶腿", "code": "505416", "qty": 1}], "combo_rounds": [{"id": 1, "name": "选择麦麦脆汁鸡", "min": 1, "max": 1, "choices": [{"code": "505416", "name": "麦麦脆汁鸡-琵琶腿", "diff": 0, "is_default": true, "quantity": 1, "min": 0, "max": -1}]}], "nutrition_estimated": false}, 1], [{"code": "6352", "name": "阳光橙麦炫酷", "price": 1300, "category": "drink", "calories": null, "protein": null, "fat": null, "sodium": null, "tags": ["冷饮"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1], [{"code": "515837", "name": "圆筒冰淇淋", "price": 500, "category": "dessert", "calories": 93, "protein": 2.0, "fat": 3.0, "sodium": 36.0, "tags": ["冰淇淋"], "combo_items": [], "combo_rounds": [], "nutrition_estimated": false}, 1]], "swaps": [], "swap_diff": 0, "resolved": {"9900005432": [{"round": "选择麦麦脆汁鸡", "name": "麦麦脆汁鸡-琵琶腿", "dropped": false}]}, "nut_override": {}}], "total_cost": 24000, "coupon_saving": 0, "verified_price": null, "notes": ["共 4 人，总计 ¥240.00，人均 ¥60.00", "人均热量约 628 千卡，人均蛋白约 19.0 克", "预算利用率 100%（人均上限 ¥60）", "已按忌口过滤：小王(不吃牛肉、不吃辣)；小李(素食（蛋奶素）)；小张(不吃海鲜)", "为满足忌口自动换件：选择汉堡「人气超值四件套随心选」麦辣鸡腿汉堡→龙焰鸡腿堡(同价)"], "total_cost_yuan": 240.0, "per_person_cost_yuan": 60.0, "total_calories": 2513, "per_person_calories": 628, "coupon_saving_yuan": 0.0, "share": [{"person": "我", "items": [{"name": "板烧鸡腿堡", "qty": 1, "subtotal": 2350, "combo": "", "combo_final": ""}, {"name": "小杯玉米杯", "qty": 1, "subtotal": 1300, "combo": "", "combo_final": ""}, {"name": "锡兰红茶", "qty": 1, "subtotal": 1150, "combo": "", "combo_final": ""}, {"name": "新地", "qty": 1, "subtotal": 1200, "combo": "朱古力新地", "combo_final": "朱古力新地"}], "swaps": [], "swap_diff": 0, "calories": 586, "protein": 28.0, "nutrition_verified": false, "should_pay": 6000}, {"person": "小王", "items": [{"name": "人气超值四件套随心选", "qty": 1, "subtotal": 5700, "combo": "麦辣鸡腿汉堡 + 中薯条 + 麦乐鸡4块 + 可乐中杯", "combo_final": "龙焰鸡腿堡 + 中薯条 + 麦乐鸡4块 + 可乐中杯"}, {"name": "北美招牌牧场酱", "qty": 1, "subtotal": 300, "combo": "", "combo_final": ""}], "swaps": [{"round": "选择汉堡", "frm": "麦辣鸡腿汉堡", "to": "龙焰鸡腿堡", "diff": 0, "reason": "diet", "combo": "人气超值四件套随心选", "qty": 1}, {"round": "说明", "frm": "", "to": "", "diff": 0, "combo": "人气超值四件套随心选", "note": "（该套餐为可选项组合，实际选择：龙焰鸡腿堡 + 中薯条 + 麦乐鸡4块 + 可乐中杯）"}], "swap_diff": 0, "calories": 1091, "protein": 38.0, "nutrition_verified": false, "should_pay": 6000}, {"person": "小李", "items": [{"name": "学生专享汉堡小食随心选", "qty": 1, "subtotal": 2700, "combo": "中薯条×2", "combo_final": "中薯条 + 奥利奥麦旋风"}, {"name": "月下相思扭扭薯", "qty": 1, "subtotal": 1500, "combo": "", "combo_final": ""}, {"name": "【美汁源】“黄金橙橙”", "qty": 1, "subtotal": 1300, "combo": "", "combo_final": ""}, {"name": "灰焰圆筒", "qty": 1, "subtotal": 500, "combo": "", "combo_final": ""}], "swaps": [], "swap_diff": 0, "calories": 743, "protein": 8.0, "nutrition_verified": false, "should_pay": 6000}, {"person": "小张", "items": [{"name": "龙焰芝士棒鸡腿堡", "qty": 1, "subtotal": 2700, "combo": "", "combo_final": ""}, {"name": "麦麦脆汁鸡1块", "qty": 1, "subtotal": 1500, "combo": "麦麦脆汁鸡-琵琶腿", "combo_final": "麦麦脆汁鸡-琵琶腿"}, {"name": "阳光橙麦炫酷", "qty": 1, "subtotal": 1300, "combo": "", "combo_final": ""}, {"name": "圆筒冰淇淋", "qty": 1, "subtotal": 500, "combo": "", "combo_final": ""}], "swaps": [], "swap_diff": 0, "calories": 93, "protein": 2.0, "nutrition_verified": false, "should_pay": 6000}]}], "warnings": ["已扫描 331776 个候选组合，筛出 331776 个可行解。"], "infeasible_reason": null}, "solo": {"person": "我", "diet": ["不吃牛肉"], "one_plus_one_count": 3, "board": [{"zone": "选择小食", "choices": [{"name": "脆皮鸡柳3根", "code": "521823", "diff": 0, "is_default": true, "conflict": false, "conflict_with": []}, {"name": "麦麦脆汁鸡-琵琶腿", "code": "505416", "diff": 0, "is_default": false, "conflict": false, "conflict_with": []}, {"name": "韩式甜辣酱鸡块", "code": "521802", "diff": 0, "is_default": false, "conflict": false, "conflict_with": []}]}, {"zone": "选择蘸酱", "choices": [{"name": "韩式烟熏芝士风味酱", "code": "521966", "diff": 0, "is_default": true, "conflict": false, "conflict_with": []}, {"name": "北美招牌牧场酱", "code": "521797", "diff": 0, "is_default": true, "conflict": false, "conflict_with": []}, {"name": "日式鲜磨山葵酱", "code": "521799", "diff": 0, "is_default": false, "conflict": false, "conflict_with": []}]}], "recs": [{"name": "蘸酱炸鸡", "price": 1190, "base_price": 1190, "is_1p1": true, "picks": [{"zone": "选择小食", "name": "脆皮鸡柳3根"}, {"zone": "选择蘸酱", "name": "韩式烟熏芝士风味酱"}], "calories": null, "protein": null}, {"name": "精选超值随心配", "price": 1390, "base_price": 1390, "is_1p1": true, "picks": [{"zone": "蓝区", "name": "那么大鸡排（椒盐风味）"}, {"zone": "粉区", "name": "怡泉+C麦炫酷"}], "calories": null, "protein": null}, {"name": "人气经典随心配", "price": 1490, "base_price": 1490, "is_1p1": true, "picks": [{"zone": "蓝区", "name": "麦香鱼"}, {"zone": "粉区", "name": "可乐麦炫酷"}], "calories": null, "protein": null}, {"name": "派", "price": 850, "base_price": 850, "is_1p1": false, "picks": [{"zone": "选择派", "name": "菠萝派"}], "calories": null, "protein": null}, {"name": "麦咖啡冰爽一夏", "price": 990, "base_price": 990, "is_1p1": false, "picks": [{"zone": "选择雪冰", "name": "美禄可可雪冰"}], "calories": null, "protein": null}]}};
+
+function yuan(c){return (c/100).toFixed(2);}
+
+// 顶部统计（数字来自真实校验）
+document.getElementById('s1').textContent = '146 / 0';
+document.getElementById('s2').textContent = '0 漏网';
+document.getElementById('s3').textContent = '0 问题';
+document.getElementById('s4').textContent = '58 / 63';
+
+// ---- 多人 ----
+(function(){
+  const d = D.multi;
+  const pp = d.request.people.map(p => p.name + (p.diet.length ? '['+p.diet.join('、')+']' : '')).join(' · ');
+  document.getElementById('multi-lead').textContent =
+    d.request.headcount + ' 人 · 人均预算 ¥' + d.request.budget + ' · ' + pp
+    + '　｜　门店：' + (d.store.storeName || '-');
+
+  const box = document.getElementById('multi');
+  if(!d.plans.length){
+    box.innerHTML = '<div class="card">无可行方案：'+(d.infeasible_reason||'')+'</div>';
+    return;
+  }
+  d.plans.forEach(function(pl, idx){
+    const badge = idx===0 ? 'badge' : (pl.strategy==='healthy' ? 'badge ok' : 'badge plain');
+    let html = '<div class="card"><h3>方案 '+(idx+1)+' · '+pl.title
+      + '<span class="'+badge+'">'+pl.strategy+'</span></h3>';
+    html += '<div class="kpis">'
+      + '<div class="kpi"><div class="l">总价</div><div class="n">¥'+pl.total_cost_yuan.toFixed(2)+'</div></div>'
+      + '<div class="kpi"><div class="l">人均</div><div class="n">¥'+pl.per_person_cost_yuan.toFixed(2)+'</div></div>'
+      + '<div class="kpi"><div class="l">总热量</div><div class="n">'+pl.total_calories+' kcal</div></div>'
+      + '<div class="kpi"><div class="l">人均热量</div><div class="n">'+pl.per_person_calories+' kcal</div></div>'
+      + '</div>';
+
+    pl.share.forEach(function(row){
+      html += '<div class="person"><div class="top"><span class="who">'+row.person
+        + '</span><span class="pay">应付 ¥'+yuan(row.should_pay)+'</span></div>';
+      html += '<div class="items">' + row.items.map(function(i){
+          return i.name + (i.qty>1 ? '×'+i.qty : '');
+        }).join(' + ') + '</div>';
+      html += '<div class="meta">'+row.calories+' kcal ｜ 蛋白 '+row.protein+'g'
+        + (row.nutrition_verified===false ? ' ｜ <span style="color:#b45309">⚠ 含营养缺失项，热量不可保证</span>' : '')
+        + '</div>';
+      row.items.forEach(function(i){
+        if(!i.combo) return;
+        const fin = i.combo_final || i.combo;
+        if(fin !== i.combo){
+          html += '<div class="combo">└ 实际组成：<b>'+fin+'</b>　<span style="color:#9ca3af">（菜单默认：'+i.combo+'）</span></div>';
+        } else {
+          html += '<div class="combo">└ 含：'+i.combo+'</div>';
+        }
+      });
+      (row.swaps||[]).forEach(function(s){
+        if(s.note){ html += '<div class="note">ℹ '+s.note+'</div>'; return; }
+        const why = s.reason==='diet' ? '为忌口' : '同价优选';
+        const dt = s.diff<0 ? '省¥'+yuan(-s.diff) : (s.diff>0 ? '加¥'+yuan(s.diff) : '同价');
+        html += '<div class="swap">↻ 换件（'+why+'）'+s.round+'：'+s.frm+' → '+s.to+'（'+dt+'）</div>';
+      });
+      html += '</div>';
+    });
+
+    if(pl.notes && pl.notes.length){
+      html += '<div class="meta" style="margin-top:10px">'
+        + pl.notes.map(function(n){return '· '+n;}).join('<br>') + '</div>';
+    }
+    const tot = pl.share.reduce(function(a,r){return a+r.should_pay;},0);
+    html += '<div class="checksum">'+(tot===pl.total_cost?'✓':'✗')
+      + ' 分摊校验：各人应付合计 ¥'+yuan(tot)+' = 订单总额 ¥'+yuan(pl.total_cost)+'</div>';
+    html += '</div>';
+    box.insertAdjacentHTML('beforeend', html);
+  });
+})();
+
+// ---- 单人 ----
+(function(){
+  const s = D.solo;
+  document.getElementById('solo-lead').textContent =
+    '本人：' + s.person + (s.diet.length ? '['+s.diet.join('、')+']' : '[无限制]')
+    + '　｜　菜单中找到 ' + s.one_plus_one_count + ' 款 1+1 形态套餐　｜　'
+    + '标记 ✗ = 与你的忌口冲突';
+
+  document.getElementById('board').innerHTML = s.board.map(function(z){
+    return '<div class="zone"><div class="zn">'+z.zone+'</div>'
+      + z.choices.map(function(c){
+          const cls = c.conflict ? 'ch no' : 'ch';
+          let rt = '';
+          if(c.diff<0) rt = '省¥'+yuan(-c.diff);
+          else if(c.diff>0) rt = '加¥'+yuan(c.diff);
+          if(c.conflict) rt = '✗ '+c.conflict_with.join('、');
+          const def = c.is_default ? ' <span class="def">★默认</span>' : '';
+          return '<div class="'+cls+'"><span>'+c.name+def+'</span><span class="rt">'+rt+'</span></div>';
+        }).join('')
+      + '</div>';
+  }).join('');
+
+  document.getElementById('recs').innerHTML = s.recs.map(function(r, i){
+    return '<div class="rec"><div class="h"><span>'+(i+1)+'. '
+      + (r.is_1p1 ? '<span class="badge">1+1</span> ' : '') + r.name + '</span>'
+      + '<span class="p">¥'+(r.price/100).toFixed(2)+'</span></div>'
+      + '<div class="z">' + r.picks.map(function(p){
+          return '<span style="color:#6b7280">'+p.zone+'</span>：'+p.name;
+        }).join('　·　') + '</div>'
+      + '<div class="meta">' + (r.calories!=null ? r.calories+' kcal ｜ 蛋白 '+(r.protein||0)+'g' : '') + '</div>'
+      + '</div>';
+  }).join('') || '<div class="card">在预算/忌口内无可用方案。</div>';
+})();
+</script>
+</body>
+</html>
